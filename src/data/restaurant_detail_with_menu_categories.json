@@ -1,0 +1,74 @@
+{
+  "id": 34,
+  "name": "Chez Mammà",
+  "description": "test",
+  "address": "Rue du Sacre du Printemps 11A",
+  "city": "Clarens",
+  "postal_code": "1815",
+  "phone": "0792222222222",
+  "open": true,
+  "rating": 5.0,
+  "reviews": 120,
+  "min_amount": 15,
+  "average_amount": 30,
+  "delivery_fee": 5.0,
+  "no_waste": true,
+  "categories": [],
+  "images": [],
+  "foods": [
+    {
+      "id": 34,
+      "name": "Pizzas",
+      "description": "",
+      "image": null
+    },
+    {
+      "id": 67,
+      "name": "Antipasti",
+      "description": "",
+      "image": null
+    },
+    {
+      "id": 68,
+      "name": "Pizzas sans gluten",
+      "description": "",
+      "image": null
+    },
+    {
+      "id": 69,
+      "name": "Calzone",
+      "description": "",
+      "image": null
+    },
+    {
+      "id": 70,
+      "name": "Pâtes",
+      "description": "",
+      "image": null
+    },
+    {
+      "id": 71,
+      "name": "Rosticceria",
+      "description": "",
+      "image": null
+    },
+    {
+      "id": 72,
+      "name": "Sandwiches",
+      "description": "",
+      "image": null
+    },
+    {
+      "id": 73,
+      "name": "Dessert",
+      "description": "",
+      "image": null
+    },
+    {
+      "id": 74,
+      "name": "Boissons",
+      "description": "",
+      "image": null
+    }
+  ]
+}

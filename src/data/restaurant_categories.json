@@ -1,0 +1,22 @@
+[
+  {
+    "id": 1,
+    "name": "Fast Food",
+    "description": "test"
+  },
+  {
+    "id": 2,
+    "name": "Italian",
+    "description": "test"
+  },
+  {
+    "id": 3,
+    "name": "Healthy",
+    "description": ""
+  },
+  {
+    "id": 4,
+    "name": "Japanese",
+    "description": ""
+  }
+]
