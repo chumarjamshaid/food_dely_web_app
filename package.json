@@ -2,10 +2,14 @@
   "name": "food_dely",
   "version": "0.1.0",
   "private": true,
+  "engines": {
+    "node": "22.x",
+    "npm": "10.x"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build --webpack",
-    "start": "next start",
+    "start": "next start -H 0.0.0.0",
     "lint": "eslint src --max-warnings=0"
   },
   "dependencies": {

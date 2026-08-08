@@ -29,8 +29,29 @@ To learn more about Next.js, take a look at the following resources:
 
 You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
 
-## Deploy on Vercel
+## Deploy on Render
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Deploy this application as a **Node Web Service**, not a Static Site. The
+repository includes `render.yaml` with the production build, start, health
+check, and Node runtime settings.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+For a manually configured service, use:
+
+- Runtime: `Node`
+- Build command: `npm ci --include=dev && npm run build`
+- Start command: `npm start`
+- Health check path: `/`
+- Auto-deploy: enabled for the production branch
+
+Add these environment variables in the Render dashboard before deploying:
+
+```text
+NODE_ENV=production
+NEXT_PUBLIC_API_URL=https://backend.fooddely.com
+NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_test_or_live_value_from_Stripe
+```
+
+Never add Stripe secret keys to this frontend service. Only the publishable
+key (`pk_test_...` or `pk_live_...`) belongs here. Because variables prefixed
+with `NEXT_PUBLIC_` are embedded during `next build`, trigger a new deployment
+after changing either value.
