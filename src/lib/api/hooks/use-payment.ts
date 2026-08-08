@@ -1,13 +1,13 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../client";
-import { getSessionId, isAuthenticated } from "../session";
+import { getOrCreateSessionId, isAuthenticated } from "../session";
 import type {
   PaymentConfirmRequest,
   PaymentConfirmResponse,
   PaymentIntentRequest,
   PaymentIntentResponse,
 } from "../types";
-import { orderKeys } from "./use-orders";
+import { normalizeOrderStatus, orderKeys } from "./use-orders";
 
 // Create payment intent
 async function createPaymentIntent(
@@ -30,7 +30,7 @@ async function createPaymentIntent(
 
   try {
     // For anonymous users, include session_id as query parameter
-    const sessionId = !isAuthenticated() ? getSessionId() : null;
+    const sessionId = !isAuthenticated() ? getOrCreateSessionId() : null;
     const params = sessionId ? { session_id: sessionId } : undefined;
 
     // Explicitly set Content-Type to multipart/form-data (axios will add boundary)
@@ -71,7 +71,7 @@ async function confirmPayment(
   data: PaymentConfirmRequest
 ): Promise<PaymentConfirmResponse> {
   // For anonymous users, include session_id as query parameter
-  const sessionId = !isAuthenticated() ? getSessionId() : null;
+  const sessionId = !isAuthenticated() ? getOrCreateSessionId() : null;
   const params = sessionId ? { session_id: sessionId } : undefined;
 
   const response = await apiClient.post<PaymentConfirmResponse>(
@@ -79,12 +79,13 @@ async function confirmPayment(
     data,
     {
       params, // Pass session_id as query parameter
+      timeout: 20_000,
       headers: {
         "Content-Type": "application/json",
       },
     }
   );
-  return response.data;
+  return { ...response.data, status: normalizeOrderStatus(String(response.data.status)) };
 }
 
 /**

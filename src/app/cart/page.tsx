@@ -1,635 +1,321 @@
 "use client";
+
+import SafeImage from "@/components/SafeImage";
 import {
-  useAuth,
   useCart,
-  useCreatePaymentIntent,
-  useLogout,
+  useApplyPromoCode,
   useRemoveFromCart,
+  useRemovePromoCode,
+  useUpdateCartItem,
 } from "@/lib/api";
+import { extractAuthError } from "@/lib/api/error";
+import type { CartItemResponse } from "@/lib/api/types";
 import { clearCartRestaurantId } from "@/lib/cart-restaurant";
-import "@fontsource/abril-fatface";
-import Image from "next/image";
+import { getCartTotal } from "@/lib/cart-total";
+import {
+  ArrowLeft,
+  ArrowRight,
+  LoaderCircle,
+  Minus,
+  Plus,
+  ShieldCheck,
+  ShoppingBag,
+  SlidersHorizontal,
+  Trash2,
+} from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
-interface GuestInfo {
-  firstName: string;
-  lastName: string;
-  email: string;
-  phone: string;
-  address: string;
-  postalCode: string;
-  city: string;
-  deliveryNotes: string;
-}
-
 export default function CartPage() {
-  const router = useRouter();
-  const { data: apiCart, isLoading: isCartLoading, refetch: refetchCart } = useCart();
-  const { isAuthenticated, user, isLoading: isAuthLoading } = useAuth();
-  const logout = useLogout();
-  const removeFromCartMutation = useRemoveFromCart();
-  const createPaymentIntent = useCreatePaymentIntent();
+  const { data: cart, isLoading, error: cartError, refetch } = useCart();
+  const removeItem = useRemoveFromCart();
+  const updateItem = useUpdateCartItem();
+  const [actionItemId, setActionItemId] = useState<number | null>(null);
+  const [actionError, setActionError] = useState("");
+  const [promoCode, setPromoCode] = useState("");
+  const applyPromo = useApplyPromoCode();
+  const removePromo = useRemovePromoCode();
 
-  // Local state for cart items (for immediate UI updates)
-  const [localCartItems, setLocalCartItems] = useState<Array<{
-    id: number;
-    quantity: number;
-    menu_item: { id: number; name: string; price: number; image?: string } | null;
-    nowaste_item: { id: number; name: string; price: number; image?: string } | null;
-  }>>([]);
-
-  const [deliveryType, setDeliveryType] = useState<"delivery" | "pickup">("delivery");
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [guestInfo, setGuestInfo] = useState<GuestInfo>({
-    firstName: "",
-    lastName: "",
-    email: "",
-    phone: "",
-    address: "",
-    postalCode: "",
-    city: "",
-    deliveryNotes: "",
-  });
-
-  // Pre-fill form with user data if authenticated
   useEffect(() => {
-    if (isAuthenticated && user && !isAuthLoading) {
-      setGuestInfo((prev) => ({
-        ...prev,
-        firstName: user.firstname || prev.firstName,
-        lastName: user.lastname || prev.lastName,
-        email: user.email || prev.email,
-        phone: user.phone || prev.phone,
-      }));
-    }
-  }, [isAuthenticated, user, isAuthLoading]);
+    if (cart?.items.length === 0) clearCartRestaurantId();
+  }, [cart?.items.length]);
 
-  // Refetch cart on mount
-  useEffect(() => {
-    refetchCart();
-  }, [refetchCart]);
+  const changeQuantity = (cartItem: CartItemResponse, quantity: number) => {
+    setActionError("");
+    setActionItemId(cartItem.id);
 
-  // Clear stored cart restaurant when cart becomes empty (e.g. after removing last item)
-  useEffect(() => {
-    if (apiCart?.items?.length === 0) {
-      clearCartRestaurantId();
-    }
-  }, [apiCart?.items?.length]);
-
-  // Sync local cart items with API cart
-  useEffect(() => {
-    if (apiCart?.items) {
-      setLocalCartItems(apiCart.items.map(item => ({
-        id: item.id,
-        quantity: item.quantity,
-        menu_item: item.menu_item ? {
-          id: item.menu_item.id,
-          name: item.menu_item.name,
-          price: item.menu_item.price,
-          image: item.menu_item.image,
-        } : null,
-        nowaste_item: item.nowaste_item ? {
-          id: item.nowaste_item.id,
-          name: item.nowaste_item.name,
-          price: item.nowaste_item.price,
-          image: item.nowaste_item.image,
-        } : null,
-      })) as unknown as Array<{
-        id: number;
-        quantity: number;
-        menu_item: { id: number; name: string; price: number; image?: string } | null;
-        nowaste_item: { id: number; name: string; price: number; image?: string } | null;
-      }>);
-    }
-  }, [apiCart]);
-
-  const handleRemoveItem = (itemId: number) => {
-    // Update local state immediately
-    setLocalCartItems(prev => prev.filter(item => item.id !== itemId));
-    // Then sync with API
-    removeFromCartMutation.mutate(itemId, {
-      onSuccess: () => {
-        refetchCart();
-      },
-    });
-  };
-
-  const handleUpdateQuantity = (itemId: number, newQuantity: number) => {
-    if (newQuantity <= 0) {
-      handleRemoveItem(itemId);
+    if (quantity <= 0) {
+      removeItem.mutate(cartItem.id, {
+        onSettled: () => setActionItemId(null),
+        onError: (mutationError) =>
+          setActionError(
+            extractAuthError(mutationError, "This item could not be removed."),
+          ),
+      });
       return;
     }
-    // Update local state immediately for responsive UI
-    setLocalCartItems(prev =>
-      prev.map(item =>
-        item.id === itemId ? { ...item, quantity: newQuantity } : item
-      )
+
+    updateItem.mutate(
+      { cartItem, quantity },
+      {
+        onSettled: () => setActionItemId(null),
+        onError: (mutationError) =>
+          setActionError(
+            extractAuthError(
+              mutationError,
+              "The quantity could not be updated.",
+            ),
+          ),
+      },
     );
   };
 
-  const handleGuestInfoChange = (field: keyof GuestInfo, value: string) => {
-    setGuestInfo((prev) => ({
-      ...prev,
-      [field]: value,
-    }));
-  };
-
-  // Calculate totals using local cart items for immediate updates
-  const subtotal = localCartItems.reduce((sum, item) => {
-    const price = item.menu_item?.price || item.nowaste_item?.price || 0;
-    return sum + price * item.quantity;
-  }, 0);
-
-  const deliveryFee = deliveryType === "delivery" ? 5.00 : 0;
-  const taxes = subtotal * 0.077; // 7.7% Swiss VAT
-  const total = subtotal + deliveryFee + taxes;
-
-  // Validate form
-  const isFormValid = () => {
-    if (!guestInfo.firstName || !guestInfo.lastName || !guestInfo.email || !guestInfo.phone) {
-      return false;
-    }
-    if (deliveryType === "delivery") {
-      return !!(guestInfo.address && guestInfo.postalCode && guestInfo.city);
-    }
-    return true;
-  };
-
-  // Handle checkout - Create payment intent and redirect to Stripe
-  const handleCheckout = async () => {
-    if (!apiCart?.items || apiCart.items.length === 0) {
-      setError("Your cart is empty");
-      return;
-    }
-
-    if (!isFormValid()) {
-      setError("Please fill in all required fields");
-      return;
-    }
-
-    setIsProcessing(true);
-    setError(null);
-
-    const deliveryInfo = {
-      delivery_firstname: guestInfo.firstName,
-      delivery_lastname: guestInfo.lastName,
-      delivery_address: deliveryType === "delivery" ? guestInfo.address : "Pickup",
-      delivery_postal_code: deliveryType === "delivery" ? guestInfo.postalCode : "",
-      delivery_city: deliveryType === "delivery" ? guestInfo.city : "",
-      delivery_phone: guestInfo.phone,
-      delivery_email: guestInfo.email,
-    };
-
-    createPaymentIntent.mutate(deliveryInfo, {
-      onSuccess: (response) => {
-        // Get the Stripe checkout URL and redirect
-        const clientSecret = response.payment_intent_client_secret || response.client_secret;
-        if (clientSecret) {
-          // Keep checkout data scoped to this browser tab and out of the URL.
-          if (typeof window !== "undefined") {
-            sessionStorage.setItem("checkout_guest_info", JSON.stringify(guestInfo));
-            sessionStorage.setItem("checkout_delivery_type", deliveryType);
-            sessionStorage.setItem("checkout_client_secret", clientSecret);
-          }
-          window.location.href = "/payment";
-        } else {
-          setError("Failed to create payment. Please try again.");
-          setIsProcessing(false);
-        }
-      },
-      onError: (err) => {
-        const error = err as { response?: { data?: { message?: string; error?: string } } };
-        setError(error?.response?.data?.message || error?.response?.data?.error || "Failed to process checkout");
-        setIsProcessing(false);
-      },
+  const removeCartItem = (cartItemId: number) => {
+    setActionError("");
+    setActionItemId(cartItemId);
+    removeItem.mutate(cartItemId, {
+      onSettled: () => setActionItemId(null),
+      onError: (mutationError) =>
+        setActionError(
+          extractAuthError(mutationError, "This item could not be removed."),
+        ),
     });
   };
 
-  if (isCartLoading || isAuthLoading) {
+  if (isLoading) {
     return (
-      <div className="min-h-screen bg-white flex items-center justify-center">
-        <div className="text-center">
-          <div className="inline-block w-12 h-12 border-4 border-[#CD3625] border-t-transparent rounded-full animate-spin"></div>
-          <p className="text-gray-500 text-lg mt-4">Loading cart...</p>
+      <main className="flex min-h-screen items-center justify-center bg-[#fbfaf8]">
+        <div className="flex items-center gap-3 text-sm font-bold text-[#6d625c]">
+          <LoaderCircle className="animate-spin text-[#c83b2b]" />
+          Loading your cart…
         </div>
-      </div>
+      </main>
     );
   }
 
+  const itemCount =
+    cart?.items.reduce((sum, item) => sum + item.quantity, 0) ?? 0;
+  const total = getCartTotal(cart);
+  const money = (value: string | number | undefined) => Number(value ?? 0).toFixed(2);
+
   return (
-    <div className="bg-white min-h-screen">
-      {/* Header */}
-      <header className="fixed top-0 left-0 w-full z-50 bg-white border-b border-gray-400">
-        <div className="max-w-[1400px] mx-auto flex items-center justify-between px-4 sm:px-6 lg:px-8 py-4 lg:py-6 min-h-[64px]">
-          {/* Back Button */}
-          <button
-            onClick={() => router.back()}
-            className="mr-4 lg:mr-6 flex items-center justify-center w-10 h-10 rounded-lg hover:bg-gray-100 cursor-pointer"
+    <main className="min-h-screen bg-[#fbfaf8] text-[#241f1c]">
+      <header className="border-b border-[#ece3de] bg-white/90 backdrop-blur-xl">
+        <div className="mx-auto flex min-h-[72px] max-w-6xl items-center justify-between px-4 sm:px-8">
+          <Link
+            href="/partners"
+            className="inline-flex items-center gap-2 rounded-xl px-2 py-2 text-sm font-bold text-[#665b55] transition hover:bg-[#f7f1ee] hover:text-[#b63825]"
           >
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M19 12H5M12 19l-7-7 7-7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          </button>
-
-          <Link href="/" className="flex items-center mr-4 lg:mr-8 cursor-pointer">
-            <span
-              className="text-[20px] sm:text-[24px] lg:text-[32px] font-extrabold select-none"
-              style={{ fontFamily: "Abril Fatface, serif" }}
-            >
-              <span className="text-[#CD3625]">FOOD</span>
-              <span className="text-black">DELY</span>
-            </span>
+            <ArrowLeft size={18} />
+            <span className="hidden sm:inline">Continue browsing</span>
           </Link>
-
-          <div className="flex-1" />
-
-          <div className="flex items-center gap-3 mr-4 lg:mr-6">
-            {/* Cart */}
-            <Link href="/cart" className="relative flex items-center justify-center w-12 h-12 lg:w-14 lg:h-14 rounded-full bg-[#CD3625] cursor-pointer transition">
-              <Image
-                src="/images/cart-icon.svg"
-                alt="Cart"
-                width={20}
-                height={20}
-                className="lg:w-6 lg:h-6 brightness-0 invert"
-              />
-              {apiCart?.items && apiCart.items.length > 0 && (
-                <div className="absolute -top-1 -right-1 bg-white text-[#CD3625] text-xs font-bold w-5 h-5 flex items-center justify-center rounded-full border-2 border-[#CD3625]">
-                  {apiCart.items.reduce((sum, item) => sum + item.quantity, 0)}
-                </div>
-              )}
-            </Link>
-            {/* Notification Bell */}
-            <div className="relative">
-              <button className="flex items-center justify-center w-12 h-12 lg:w-14 lg:h-14 rounded-full bg-[#F7F8FD] cursor-pointer">
-                <Image
-                  src="/images/star-icon.svg"
-                  alt="Notifications"
-                  width={20}
-                  height={20}
-                  className="lg:w-6 lg:h-6"
-                />
-              </button>
-              <div className="absolute -top-1 -right-1 w-4 h-4 bg-[#CD3625] rounded-full border-2 border-white"></div>
-            </div>
-          </div>
-
-          <div className="hidden md:flex items-center gap-8">
-            {!isAuthLoading && (
-              <>
-                {!isAuthenticated ? (
-                  <>
-                    <Link
-                      href="/signin"
-                      className="text-yellow-600 text-[16px] lg:text-[18px] underline hover:text-yellow-700"
-                    >
-                      Sign In
-                    </Link>
-                    <Link
-                      href="/signup"
-                      className="bg-[#CD3625] text-white cursor-pointer px-6 lg:px-8 py-2.5 lg:py-3.5 rounded-full font-semibold hover:bg-[#b83213] transition text-sm lg:text-base">
-                      Sign Up
-                    </Link>
-                  </>
-                ) : (
-                  <div className="flex items-center gap-4">
-                    <Link
-                      href="/orders"
-                      className="text-black text-[16px] hover:text-gray-600 font-medium"
-                    >
-                      Orders
-                    </Link>
-                    <Link
-                      href="/profile"
-                      className="text-black text-[16px] hover:text-gray-600 font-medium"
-                    >
-                      {user?.firstname || "Profile"}
-                    </Link>
-                    <button
-                      onClick={() => {
-                        logout();
-                        window.location.href = "/";
-                      }}
-                      className="bg-gray-200 text-black px-4 py-2 rounded-full font-medium hover:bg-gray-300 transition text-sm"
-                    >
-                      Logout
-                    </button>
-                  </div>
-                )}
-              </>
+          <Link href="/" className="text-[24px] font-black tracking-[-0.04em]">
+            <span className="text-[#c83b2b]">FOOD</span>DELY
+          </Link>
+          <div className="relative flex h-10 w-10 items-center justify-center rounded-xl bg-[#fff0eb] text-[#b63825]">
+            <ShoppingBag size={20} />
+            {itemCount > 0 && (
+              <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-[#c83b2b] px-1 text-[10px] font-black text-white">
+                {itemCount}
+              </span>
             )}
           </div>
         </div>
       </header>
 
-      <div className="max-w-[1400px] mx-auto pt-24 lg:pt-28">
+      <div className="mx-auto max-w-6xl px-4 py-8 sm:px-8 sm:py-12">
+        <div>
+          <p className="text-xs font-bold uppercase tracking-[0.17em] text-[#b63825]">
+            Your order
+          </p>
+          <h1 className="mt-2 text-3xl font-black tracking-[-0.04em] sm:text-4xl">
+            Review your cart
+          </h1>
+          <p className="mt-2 text-sm text-[#7d716a]">
+            Quantities and removals are saved directly to your cart.
+          </p>
+        </div>
 
-        <main className="px-4 sm:px-8 py-8">
-          <h1 className="text-3xl font-bold text-black mb-8">Your Cart</h1>
+        {(actionError || cartError) && (
+          <div
+            role="alert"
+            className="mt-6 flex items-center justify-between gap-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700"
+          >
+            <span>
+              {actionError ||
+                "Your cart could not be loaded. Please try again."}
+            </span>
+            {cartError && (
+              <button type="button" onClick={() => refetch()} className="underline">
+                Retry
+              </button>
+            )}
+          </div>
+        )}
 
-          {!isCartLoading && localCartItems.length === 0 ? (
-            <div className="text-center py-16">
-              <div className="w-24 h-24 mx-auto mb-6 bg-gray-100 rounded-full flex items-center justify-center">
-                <Image
-                  src="/images/cart-icon.svg"
-                  alt="Empty cart"
-                  width={48}
-                  height={48}
-                  className="opacity-50"
-                />
-              </div>
-              <h2 className="text-xl font-semibold text-gray-700 mb-2">Your cart is empty</h2>
-              <p className="text-gray-500 mb-6">Add some delicious items to get started!</p>
-              <Link
-                href="/partners"
-                className="inline-block bg-[#CD3625] text-white px-8 py-3 rounded-full font-semibold hover:bg-[#b83213] transition"
-              >
-                Browse Restaurants
-              </Link>
+        {!cart?.items.length ? (
+          <section className="mt-8 rounded-[28px] border border-dashed border-[#d9cac3] bg-white px-6 py-16 text-center">
+            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-[#fff0eb] text-[#c83b2b]">
+              <ShoppingBag size={29} />
             </div>
-          ) : (
-            <div className="flex flex-col lg:flex-row gap-8">
-              {/* Cart Items */}
-              <div className="flex-1">
-                <div className="bg-white rounded-2xl shadow-lg p-6">
-                  <h2 className="text-xl font-bold text-black mb-6">Order Summary</h2>
+            <h2 className="mt-5 text-2xl font-black">Your cart is empty</h2>
+            <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-[#7d716a]">
+              Browse restaurants and add something delicious to begin your
+              order.
+            </p>
+            <Link
+              href="/partners"
+              className="mt-6 inline-flex min-h-12 items-center gap-2 rounded-xl bg-[#c83b2b] px-6 font-bold text-white transition hover:-translate-y-0.5 hover:bg-[#ad321f]"
+            >
+              Browse restaurants
+              <ArrowRight size={18} />
+            </Link>
+          </section>
+        ) : (
+          <div className="mt-8 grid items-start gap-6 lg:grid-cols-[1fr_340px]">
+            <section className="space-y-3">
+              {cart.items.map((cartItem) => {
+                const item = cartItem.menu_item || cartItem.nowaste_item;
+                if (!item) return null;
+                const isPending = actionItemId === cartItem.id;
 
-                  <div className="space-y-4">
-                    {localCartItems.map((item) => {
-                      const menuItem = item.menu_item || item.nowaste_item;
-                      if (!menuItem) return null;
+                return (
+                  <article
+                    key={cartItem.id}
+                    className="group grid grid-cols-[88px_1fr] gap-4 rounded-[22px] border border-[#e9dfda] bg-white p-4 shadow-[0_10px_30px_rgba(55,35,27,0.05)] transition duration-300 hover:border-[#e3b9ae] hover:shadow-[0_18px_42px_rgba(55,35,27,0.09)] sm:grid-cols-[110px_1fr_auto] sm:items-center sm:p-5"
+                  >
+                    <div className="relative h-[88px] overflow-hidden rounded-2xl bg-[#fff8f5] sm:h-[100px]">
+                      <SafeImage
+                        src={item.image}
+                        alt={item.name}
+                        fill
+                        sizes="110px"
+                        className="object-cover transition duration-500 group-hover:scale-105"
+                        fallbackClassName="object-contain p-5"
+                      />
+                    </div>
 
-                      return (
-                        <div
-                          key={item.id}
-                          className="flex items-center gap-3 sm:gap-4 p-4 bg-gray-50 rounded-xl"
-                        >
-                          <div className="w-[80px] h-[56px] sm:w-[100px] sm:h-[70px] rounded-xl overflow-hidden relative flex-shrink-0">
-                            {menuItem.image ? (
-                              <Image
-                                src={menuItem.image}
-                                alt={menuItem.name}
-                                fill
-                                className="object-cover"
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h2 className="truncate text-lg font-black tracking-tight">
+                          {item.name}
+                        </h2>
+                        {cartItem.nowaste_item && (
+                          <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-bold text-emerald-700">
+                            No Waste
+                          </span>
+                        )}
+                      </div>
+                      <p className="mt-1 text-sm font-bold text-[#b63825]">
+                        {Number(item.price).toFixed(2)} CHF each
+                      </p>
+                      {!!cartItem.options?.length && (
+                        <p className="mt-2 inline-flex items-center gap-1.5 text-xs font-semibold text-[#81746d]">
+                          <SlidersHorizontal size={14} />
+                          Customized · {cartItem.options.length}{" "}
+                          {cartItem.options.length === 1 ? "option" : "options"}
+                        </p>
+                      )}
+                    </div>
+
+                    <div className="col-span-2 flex items-center justify-between gap-4 border-t border-[#eee6e2] pt-4 sm:col-span-1 sm:flex-col sm:items-end sm:border-0 sm:pt-0">
+                      <p className="text-lg font-black">
+                        {(Number(item.price) * cartItem.quantity).toFixed(2)} CHF
+                      </p>
+                      <div className="flex items-center gap-2">
+                        <div className="flex h-10 items-center rounded-xl border border-[#ddd2cc] bg-[#fbf8f6]">
+                          <button
+                            type="button"
+                            aria-label={`Decrease ${item.name} quantity`}
+                            disabled={isPending}
+                            onClick={() =>
+                              changeQuantity(cartItem, cartItem.quantity - 1)
+                            }
+                            className="flex h-10 w-10 items-center justify-center rounded-xl transition hover:bg-white disabled:opacity-50"
+                          >
+                            <Minus size={16} />
+                          </button>
+                          <span className="min-w-8 text-center text-sm font-black">
+                            {isPending ? (
+                              <LoaderCircle
+                                size={16}
+                                className="mx-auto animate-spin text-[#c83b2b]"
                               />
                             ) : (
-                              <div className="w-full h-full bg-gray-200 flex items-center justify-center">
-                                <span className="text-gray-400 text-xs">No Image</span>
-                              </div>
+                              cartItem.quantity
                             )}
-                          </div>
-
-                          <div className="flex-1 min-w-0 flex flex-col justify-center">
-                            <div className="flex items-center justify-between w-full">
-                              <div className="flex flex-col">
-                                <h3 className="font-semibold text-black text-base sm:text-lg truncate">{menuItem.name}</h3>
-                                {item.nowaste_item && (
-                                  <span className="inline-block bg-emerald-100 text-emerald-700 text-xs px-2 py-1 rounded mt-1 w-fit">
-                                    No Waste
-                                  </span>
-                                )}
-                              </div>
-                              <p className="font-bold text-[#CD3625] text-base sm:text-lg ml-2 sm:ml-4">
-                                {(menuItem.price * item.quantity).toFixed(2)} CHF
-                              </p>
-                            </div>
-                            <div className="flex items-center justify-between gap-2 mt-2">
-                              <div className="flex items-center border border-gray-200 rounded-lg px-2 py-1 bg-white">
-                                <button
-                                  className="w-6 h-6 sm:w-7 sm:h-7 flex items-center justify-center text-lg sm:text-xl font-medium text-[#222] hover:bg-gray-100 rounded transition"
-                                  onClick={() => handleUpdateQuantity(item.id, item.quantity - 1)}
-                                >
-                                  -
-                                </button>
-                                <span className="mx-2 sm:mx-3 text-base sm:text-lg font-medium text-[#222] min-w-[20px] text-center">
-                                  {item.quantity}
-                                </span>
-                                <button
-                                  className="w-6 h-6 sm:w-7 sm:h-7 flex items-center justify-center text-lg sm:text-xl font-medium text-[#222] hover:bg-gray-100 rounded transition"
-                                  onClick={() => handleUpdateQuantity(item.id, item.quantity + 1)}
-                                >
-                                  +
-                                </button>
-                              </div>
-                              <button
-                                onClick={() => handleRemoveItem(item.id)}
-                                disabled={removeFromCartMutation.isPending}
-                                className="p-2 hover:bg-red-50 rounded-lg transition"
-                              >
-                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                  <path d="M3 6H5H21" stroke="#EF4444" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                                  <path d="M8 6V4C8 3.46957 8.21071 2.96086 8.58579 2.58579C8.96086 2.21071 9.46957 2 10 2H14C14.5304 2 15.0391 2.21071 15.4142 2.58579C15.7893 2.96086 16 3.46957 16 4V6M19 6V20C19 20.5304 18.7893 21.0391 18.4142 21.4142C18.0391 21.7893 17.5304 22 17 22H7C6.46957 22 5.96086 21.7893 5.58579 21.4142C5.21071 21.0391 5 20.5304 5 20V6H19Z" stroke="#EF4444" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                                </svg>
-                              </button>
-                            </div>
-                          </div>
+                          </span>
+                          <button
+                            type="button"
+                            aria-label={`Increase ${item.name} quantity`}
+                            disabled={isPending}
+                            onClick={() =>
+                              changeQuantity(cartItem, cartItem.quantity + 1)
+                            }
+                            className="flex h-10 w-10 items-center justify-center rounded-xl transition hover:bg-white disabled:opacity-50"
+                          >
+                            <Plus size={16} />
+                          </button>
                         </div>
-                      );
-                    })}
-                  </div>
-
-                  {/* Totals */}
-                  <div className="mt-6 pt-6 border-t border-gray-200 space-y-2">
-                    <div className="flex justify-between text-gray-600">
-                      <span>Subtotal</span>
-                      <span>{subtotal.toFixed(2)} CHF</span>
-                    </div>
-                    <div className="flex justify-between text-gray-600">
-                      <span>Delivery Fee</span>
-                      <span>{deliveryFee.toFixed(2)} CHF</span>
-                    </div>
-                    <div className="flex justify-between text-gray-600">
-                      <span>Taxes (7.7%)</span>
-                      <span>{taxes.toFixed(2)} CHF</span>
-                    </div>
-                    <div className="flex justify-between text-xl font-bold text-black pt-2 border-t border-gray-200">
-                      <span>Total</span>
-                      <span>{total.toFixed(2)} CHF</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Delivery Form */}
-              <div className="lg:w-[400px]">
-                <div className="bg-white rounded-2xl shadow-lg p-6">
-                  <h2 className="text-xl font-bold text-black mb-6">Delivery Details</h2>
-
-                  {/* Delivery Type Toggle */}
-                  <div className="flex gap-2 mb-6">
-                    <button
-                      onClick={() => setDeliveryType("delivery")}
-                      className={`flex-1 py-3 rounded-lg font-medium transition ${deliveryType === "delivery"
-                        ? "bg-[#CD3625] text-white"
-                        : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                        }`}
-                    >
-                      Delivery
-                    </button>
-                    <button
-                      onClick={() => setDeliveryType("pickup")}
-                      className={`flex-1 py-3 rounded-lg font-medium transition ${deliveryType === "pickup"
-                        ? "bg-[#CD3625] text-white"
-                        : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                        }`}
-                    >
-                      Pickup
-                    </button>
-                  </div>
-
-                  {/* Contact Information */}
-                  <div className="space-y-4">
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                          First Name *
-                        </label>
-                        <input
-                          type="text"
-                          value={guestInfo.firstName}
-                          onChange={(e) => handleGuestInfoChange("firstName", e.target.value)}
-                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#CD3625] focus:border-transparent"
-                          placeholder="John"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                          Last Name *
-                        </label>
-                        <input
-                          type="text"
-                          value={guestInfo.lastName}
-                          onChange={(e) => handleGuestInfoChange("lastName", e.target.value)}
-                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#CD3625] focus:border-transparent"
-                          placeholder="Doe"
-                        />
+                        <button
+                          type="button"
+                          aria-label={`Remove ${item.name}`}
+                          disabled={isPending}
+                          onClick={() => removeCartItem(cartItem.id)}
+                          className="flex h-10 w-10 items-center justify-center rounded-xl text-[#968982] transition hover:bg-red-50 hover:text-red-700 disabled:opacity-50"
+                        >
+                          <Trash2 size={18} />
+                        </button>
                       </div>
                     </div>
+                  </article>
+                );
+              })}
+            </section>
 
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Email *
-                      </label>
-                      <input
-                        type="email"
-                        value={guestInfo.email}
-                        onChange={(e) => handleGuestInfoChange("email", e.target.value)}
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#CD3625] focus:border-transparent"
-                        placeholder="john@example.com"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Phone *
-                      </label>
-                      <input
-                        type="tel"
-                        value={guestInfo.phone}
-                        onChange={(e) => handleGuestInfoChange("phone", e.target.value)}
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#CD3625] focus:border-transparent"
-                        placeholder="+41 XX XXX XX XX"
-                      />
-                    </div>
-
-                    {deliveryType === "delivery" && (
-                      <>
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">
-                            Address *
-                          </label>
-                          <input
-                            type="text"
-                            value={guestInfo.address}
-                            onChange={(e) => handleGuestInfoChange("address", e.target.value)}
-                            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#CD3625] focus:border-transparent"
-                            placeholder="Street and number"
-                          />
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-4">
-                          <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">
-                              Postal Code *
-                            </label>
-                            <input
-                              type="text"
-                              value={guestInfo.postalCode}
-                              onChange={(e) => handleGuestInfoChange("postalCode", e.target.value)}
-                              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#CD3625] focus:border-transparent"
-                              placeholder="1234"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">
-                              City *
-                            </label>
-                            <input
-                              type="text"
-                              value={guestInfo.city}
-                              onChange={(e) => handleGuestInfoChange("city", e.target.value)}
-                              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#CD3625] focus:border-transparent"
-                              placeholder="City"
-                            />
-                          </div>
-                        </div>
-                      </>
-                    )}
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Delivery Notes (optional)
-                      </label>
-                      <textarea
-                        value={guestInfo.deliveryNotes}
-                        onChange={(e) => handleGuestInfoChange("deliveryNotes", e.target.value)}
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#CD3625] focus:border-transparent"
-                        rows={3}
-                        placeholder="Any special instructions..."
-                      />
-                    </div>
-                  </div>
-
-                  {/* Error Message */}
-                  {error && (
-                    <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
-                      {error}
-                    </div>
-                  )}
-
-                  {/* Checkout Button */}
-                  <button
-                    onClick={handleCheckout}
-                    disabled={isProcessing || !isFormValid() || localCartItems.length === 0}
-                    className="mt-6 w-full bg-[#CD3625] text-white py-4 rounded-full font-bold text-lg hover:bg-[#b83213] transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                  >
-                    {isProcessing ? (
-                      <>
-                        <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                        Processing...
-                      </>
-                    ) : (
-                      <>
-                        Proceed to Payment
-                        <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                        </svg>
-                      </>
-                    )}
-                  </button>
-
-                  <p className="mt-4 text-xs text-gray-500 text-center">
-                    You will be redirected to Stripe for secure payment
-                  </p>
-                </div>
+            <aside className="rounded-[24px] border border-[#e4d8d2] bg-[#241b18] p-6 text-white shadow-[0_22px_55px_rgba(42,28,22,0.18)] lg:sticky lg:top-6">
+              <p className="text-xs font-bold uppercase tracking-[0.17em] text-[#ff9b8f]">
+                Order summary
+              </p>
+              <div className="mt-5 flex items-center justify-between border-b border-white/10 pb-5 text-sm text-stone-300">
+                <span>
+                  {itemCount} {itemCount === 1 ? "item" : "items"}
+                </span>
+                <span>{total.toFixed(2)} CHF</span>
               </div>
-            </div>
-          )}
-        </main>
+              <div className="space-y-2 border-b border-white/10 py-5 text-sm">
+                <div className="flex justify-between text-stone-300"><span>Subtotal</span><span>{money(cart.subtotal)} CHF</span></div>
+                {Number(cart.restaurant_discount)>0&&<div className="flex justify-between text-emerald-300"><span>Restaurant discount</span><span>−{money(cart.restaurant_discount)} CHF</span></div>}
+                {Number(cart.delivery_fee)>0&&<div className="flex justify-between text-stone-300"><span>Delivery</span><span>{money(cart.delivery_fee)} CHF</span></div>}
+                {Number(cart.promo_discount)>0&&<div className="flex justify-between text-emerald-300"><span>Promo discount</span><span>−{money(cart.promo_discount)} CHF</span></div>}
+              </div>
+              <div className="border-b border-white/10 py-5">
+                {cart.promo_code?<div className="flex items-center justify-between rounded-xl bg-white/10 px-3 py-3 text-sm"><span><strong>{cart.promo_code}</strong> applied</span><button onClick={()=>removePromo.mutate()} className="font-bold text-[#ff9b8f]">Remove</button></div>:<div className="flex gap-2"><input value={promoCode} onChange={e=>setPromoCode(e.target.value)} placeholder="Promo code" className="h-11 min-w-0 flex-1 rounded-xl border border-white/15 bg-white/10 px-3 text-sm text-white placeholder:text-stone-500 outline-none focus:border-[#ff9b8f]"/><button disabled={!promoCode.trim()||applyPromo.isPending} onClick={()=>applyPromo.mutate(promoCode,{onError:e=>setActionError(extractAuthError(e,"This promo code could not be applied."))})} className="rounded-xl bg-white px-4 text-sm font-black text-[#241b18] disabled:opacity-50">Apply</button></div>}
+                {cart.promo_error&&<p className="mt-2 text-xs text-[#ff9b8f]">{cart.promo_error}</p>}
+              </div>
+              <div className="flex items-center justify-between py-5 text-xl font-black">
+                <span>Cart total</span>
+                <span>{total.toFixed(2)} CHF</span>
+              </div>
+              <p className="text-xs leading-5 text-stone-400">
+                Delivery fees, eligible discounts, and the final payable amount
+                are confirmed securely during checkout.
+              </p>
+              <Link
+                href="/payment"
+                className="mt-6 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#c83b2b] px-5 font-bold transition hover:-translate-y-0.5 hover:bg-[#ad321f] hover:shadow-lg"
+              >
+                Continue to checkout
+                <ArrowRight size={18} />
+              </Link>
+              <div className="mt-4 flex items-center justify-center gap-2 text-xs font-semibold text-stone-400">
+                <ShieldCheck size={15} />
+                Secure checkout
+              </div>
+            </aside>
+          </div>
+        )}
       </div>
-    </div>
+    </main>
   );
 }

@@ -28,9 +28,11 @@ export {
   useAddMenuItemToCart,
   useAddNoWasteItemToCart,
   useAddToCart,
+  useApplyPromoCode,
   useCart,
   useClearCart,
   useRemoveFromCart,
+  useRemovePromoCode,
   useUpdateCartItem,
   useValidateCart,
 } from "./use-cart";
@@ -48,6 +50,7 @@ export {
 
 // Payment hooks
 export { useConfirmPayment, useCreatePaymentIntent } from "./use-payment";
+export { useConfirmPasswordReset, useRequestPasswordReset, useValidatePasswordReset } from "./use-password-reset";
 
 // Restaurant owner-side hooks (sales, orders)
 export {
@@ -84,6 +87,7 @@ export {
   useAddresses,
   useCreateAddress,
   useDeleteAddress,
+  useUpdateAddress,
 } from "./use-addresses";
 
 // Menu management hooks

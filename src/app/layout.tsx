@@ -19,8 +19,8 @@ import './globals.css'
 // })
 
 export const metadata: Metadata = {
-  title: 'FoodDely Manager',
-  description: 'FoodDely Manager',
+  title: 'FoodDely | Local food delivery',
+  description: 'Discover local restaurants and order delivery or pickup with FoodDely.',
 }
 
 export default function RootLayout({

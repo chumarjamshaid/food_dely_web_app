@@ -7,7 +7,8 @@ import {
   useOrders,
 } from "@/lib/api";
 import type { OrderListItem } from "@/lib/api/types";
-import Image from "next/image";
+import SafeImage from "@/components/SafeImage";
+import { ArrowLeft, PackageCheck, RotateCcw } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
@@ -185,24 +186,23 @@ function OrdersPageContent() {
   }
 
   return (
-    <div className="bg-white min-h-screen">
-      <header className="fixed top-0 left-0 w-full z-50 bg-white border-b border-gray-400">
-        <div className="max-w-[1400px] mx-auto flex items-center justify-between px-4 sm:px-6 lg:px-8 py-4 lg:py-6 min-h-[64px]">
-          <Link href="/" className="flex items-center mr-4 lg:mr-6 cursor-pointer">
-            <span
-              className="text-[20px] sm:text-[24px] lg:text-[32px] font-extrabold select-none"
-              style={{ fontFamily: "Abril Fatface, serif" }}
-            >
-              <span className="text-[#CD3625]">FOOD</span>
-              <span className="text-black">DELY</span>
-            </span>
+    <div className="min-h-screen bg-[#fbfaf8] text-[#241f1c]">
+      <header className="sticky top-0 z-50 border-b border-[#ece3de] bg-white/90 backdrop-blur-xl">
+        <div className="mx-auto grid min-h-[72px] max-w-6xl grid-cols-[1fr_auto_1fr] items-center px-4 sm:px-8">
+          <Link href="/partners" className="flex w-fit items-center gap-2 rounded-xl px-2 py-2 text-sm font-bold text-[#665b55] transition hover:bg-[#f7f1ee] hover:text-[#b63825]">
+            <ArrowLeft size={18} />
+            <span className="hidden sm:inline">Restaurants</span>
           </Link>
 
-          <div className="hidden md:flex items-center gap-8">
-            <div className="flex items-center gap-4">
+          <Link href="/" className="text-[24px] font-black tracking-[-0.04em]">
+            <span className="text-[#c83b2b]">FOOD</span>DELY
+          </Link>
+
+          <div className="flex justify-end">
+            <div className="hidden items-center gap-3 sm:flex">
               <Link
                 href="/profile"
-                className="text-black text-[16px] hover:text-gray-600 font-medium"
+                className="rounded-xl px-3 py-2 text-sm font-bold text-[#665b55] hover:bg-[#f7f1ee]"
               >
                 {user?.firstname || "Profile"}
               </Link>
@@ -211,7 +211,7 @@ function OrdersPageContent() {
                   logout();
                   router.push("/");
                 }}
-                className="bg-gray-200 text-black px-4 py-2 rounded-full font-medium hover:bg-gray-300 transition text-sm"
+                className="rounded-xl bg-[#f1ebe7] px-3 py-2 text-sm font-bold text-[#665b55] hover:bg-[#e8ded8]"
               >
                 Logout
               </button>
@@ -220,12 +220,13 @@ function OrdersPageContent() {
         </div>
       </header>
 
-      <main className="w-full mx-auto px-4 pb-8 pt-20 sm:pt-24 lg:pt-32 max-w-[1400px]">
-        <div className="mb-6">
-          <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-black mb-2">
-            My Orders
+      <main className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-8 sm:py-12">
+        <div className="mb-8">
+          <p className="text-xs font-bold uppercase tracking-[0.17em] text-[#b63825]">Order history</p>
+          <h1 className="mt-2 text-3xl font-black tracking-[-0.04em] sm:text-4xl">
+            Your orders
           </h1>
-          <p className="text-gray-600">View and manage your order history</p>
+          <p className="mt-2 text-sm text-[#7d716a]">Track active orders and quickly return to your favourites.</p>
         </div>
 
         {ordersLoading ? (
@@ -239,8 +240,9 @@ function OrdersPageContent() {
             <p className="text-gray-400 text-sm mt-2">Please try again later.</p>
           </div>
         ) : !orders || orders.length === 0 ? (
-          <div className="text-center py-12">
-            <p className="text-gray-500 text-lg">You haven&apos;t placed any orders yet.</p>
+          <div className="rounded-[28px] border border-dashed border-[#d9cac3] bg-white px-6 py-16 text-center">
+            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-[#fff0eb] text-[#c83b2b]"><PackageCheck size={28} /></div>
+            <p className="mt-5 text-xl font-black">You haven&apos;t placed any orders yet.</p>
             <Link
               href="/partners"
               className="inline-block mt-4 bg-[#CD3625] text-white px-6 py-3 rounded-full font-medium hover:bg-[#b83213] transition"
@@ -255,10 +257,10 @@ function OrdersPageContent() {
               .map((order) => (
               <div
                 key={order.id}
-                className="bg-white rounded-2xl shadow-lg border border-gray-200 overflow-hidden"
+                className="overflow-hidden rounded-[24px] border border-[#e9dfda] bg-white shadow-[0_14px_38px_rgba(55,35,27,0.06)] transition hover:-translate-y-0.5 hover:shadow-[0_20px_48px_rgba(55,35,27,0.09)]"
               >
                 {/* Order Header */}
-                <div className="p-4 sm:p-6 border-b border-gray-200 bg-gray-50">
+                <div className="border-b border-[#eee5e0] bg-[#fcfaf9] p-4 sm:p-6">
                   <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                     <div>
                       <div className="flex items-center gap-3 mb-2">
@@ -277,10 +279,16 @@ function OrdersPageContent() {
                         Placed on {getOrderDateLabel(order)}
                       </p>
                       <p className="text-lg font-semibold text-black mt-2">
-                        Total: {order.price.toFixed(2)} CHF
+                        Total: {Number(order.price).toFixed(2)} CHF
                       </p>
                     </div>
                     <div className="flex flex-col sm:flex-row gap-2">
+                      <Link
+                        href={`/orders/${order.id}`}
+                        className="flex items-center justify-center rounded-xl border border-[#d9cec8] bg-white px-4 py-2 font-bold text-[#5f554f] transition hover:border-[#c83b2b] hover:text-[#b63825]"
+                      >
+                        Track order
+                      </Link>
                       {/* Only show Cancel while the order is still cancellable (placed or preparing) */}
                       {(() => {
                         const s = (order.status || "").toLowerCase();
@@ -297,8 +305,9 @@ function OrdersPageContent() {
                       <button
                         onClick={() => handleReorder(order)}
                         disabled={reorderingOrderId === order.id}
-                        className="px-4 py-2 bg-[#CD3625] text-white rounded-full font-medium hover:bg-[#b83213] transition disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="flex items-center justify-center gap-2 rounded-xl bg-[#c83b2b] px-4 py-2 font-bold text-white transition hover:bg-[#ad321f] disabled:cursor-not-allowed disabled:opacity-50"
                       >
+                        <RotateCcw size={15} />
                         {reorderingOrderId === order.id ? "Adding to Cart..." : "Reorder"}
                       </button>
                     </div>
@@ -320,21 +329,16 @@ function OrdersPageContent() {
                       return (
                         <div
                           key={item.id}
-                          className="flex items-center gap-4 p-3 bg-gray-50 rounded-lg"
+                          className="flex items-center gap-4 rounded-2xl border border-[#eee5e0] bg-[#fcfaf9] p-3"
                         >
                           <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-lg overflow-hidden relative flex-shrink-0">
-                            {itemData.image ? (
-                              <Image
-                                src={itemData.image}
-                                alt={itemData.name}
-                                fill
-                                className="object-cover"
-                              />
-                            ) : (
-                              <div className="w-full h-full bg-gray-200 flex items-center justify-center">
-                                <span className="text-gray-400 text-xs">No Image</span>
-                              </div>
-                            )}
+                            <SafeImage
+                              src={itemData.image}
+                              alt={itemData.name}
+                              fill
+                              className="object-cover"
+                              fallbackClassName="object-contain bg-[#fff8f5] p-3"
+                            />
                           </div>
                           <div className="flex-1 min-w-0">
                             <h4 className="font-medium text-black truncate">

@@ -156,7 +156,7 @@ export default function ProfilePage() {
                     <div>
                       <div className="text-white font-medium">Order #{order.id}</div>
                       <div className="text-gray-400 text-sm">
-                        {new Date(order.created_at).toLocaleDateString()}
+                        {order.placed || (order.created_at ? new Date(order.created_at).toLocaleDateString() : "Recently")}
                       </div>
                       <div className="text-gray-400 text-sm">
                         {order.items.length} item{order.items.length !== 1 ? "s" : ""}
@@ -168,9 +168,9 @@ export default function ProfilePage() {
                       </div>
                       <div
                         className={`text-sm mt-1 ${
-                          order.status === "COMPLETED"
+                          order.status === "completed"
                             ? "text-green-400"
-                            : order.status === "CANCELLED"
+                            : order.status === "can_cust" || order.status === "can_rest"
                             ? "text-red-400"
                             : "text-yellow-400"
                         }`}
@@ -190,4 +190,3 @@ export default function ProfilePage() {
     </div>
   );
 }
-

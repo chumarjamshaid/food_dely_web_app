@@ -143,3 +143,136 @@
 .rotate-y-180 {
   transform: rotateY(180deg);
 }
+
+@keyframes home-float {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  50% { transform: translateY(-12px) rotate(1.5deg); }
+}
+
+@keyframes home-glow {
+  0%, 100% { opacity: 0.55; transform: scale(1); }
+  50% { opacity: 0.85; transform: scale(1.12); }
+}
+
+.home-float {
+  animation: home-float 5s ease-in-out infinite;
+}
+
+.home-glow {
+  animation: home-glow 7s ease-in-out infinite;
+}
+
+@keyframes restaurant-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.992);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.restaurant-reveal {
+  animation: restaurant-reveal 480ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.checkout-theme input:not([type="checkbox"]):not([type="radio"]),
+.checkout-theme select,
+.checkout-theme textarea {
+  border-radius: 0.75rem;
+  border-color: #d9cec8;
+  background-color: #fff;
+  transition:
+    border-color 180ms ease,
+    box-shadow 180ms ease;
+}
+
+.checkout-theme input:not([type="checkbox"]):not([type="radio"]),
+.checkout-theme select {
+  min-height: 3rem;
+}
+
+.checkout-theme input:focus,
+.checkout-theme select:focus,
+.checkout-theme textarea:focus {
+  border-color: #c83b2b;
+  box-shadow: 0 0 0 4px rgb(200 59 43 / 10%);
+  outline: none;
+}
+
+.checkout-theme main > div,
+.checkout-theme .shadow {
+  transition:
+    box-shadow 280ms ease,
+    transform 280ms ease;
+}
+
+.auth-select {
+  border-radius: 0.75rem;
+  background-image:
+    linear-gradient(45deg, transparent 50%, #78716c 50%),
+    linear-gradient(135deg, #78716c 50%, transparent 50%);
+  background-position:
+    calc(100% - 16px) 21px,
+    calc(100% - 11px) 21px;
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+}
+
+@keyframes auth-orb-one {
+  0%, 100% { transform: translate3d(0, 0, 0) scale(1); opacity: 0.75; }
+  35% { transform: translate3d(46px, -28px, 0) scale(1.12); opacity: 1; }
+  70% { transform: translate3d(18px, 38px, 0) scale(0.94); opacity: 0.7; }
+}
+
+@keyframes auth-orb-two {
+  0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
+  50% { transform: translate3d(-54px, -42px, 0) scale(1.16); }
+}
+
+@keyframes auth-grid-drift {
+  from { background-position: 0 0; }
+  to { background-position: 22px 22px; }
+}
+
+@keyframes auth-dot-float {
+  0%, 100% { transform: translate3d(0, 0, 0); }
+  50% { transform: translate3d(14px, -20px, 0); }
+}
+
+@keyframes auth-ring-drift {
+  0%, 100% { transform: translateY(0) rotate(0deg); opacity: 0.45; }
+  50% { transform: translateY(-24px) rotate(18deg); opacity: 0.9; }
+}
+
+@keyframes auth-copy-breathe {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-5px); }
+}
+
+.auth-orb-one { animation: auth-orb-one 12s ease-in-out infinite; }
+.auth-orb-two { animation: auth-orb-two 15s ease-in-out infinite; }
+.auth-grid { animation: auth-grid-drift 9s linear infinite; }
+.auth-dot { animation: auth-dot-float 5s ease-in-out infinite; }
+.auth-dot-two { animation-delay: -1.2s; animation-duration: 6.5s; }
+.auth-dot-three { animation-delay: -2.7s; animation-duration: 7.5s; }
+.auth-dot-four { animation-delay: -3.8s; animation-duration: 8.5s; }
+.auth-ring { animation: auth-ring-drift 8s ease-in-out infinite; }
+.auth-ring-delayed { animation: auth-ring-drift 11s ease-in-out -4s infinite reverse; }
+.auth-copy { animation: auth-copy-breathe 7s ease-in-out infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  .home-float,
+  .home-glow,
+  .restaurant-reveal,
+  .auth-orb-one,
+  .auth-orb-two,
+  .auth-grid,
+  .auth-dot,
+  .auth-ring,
+  .auth-ring-delayed,
+  .auth-copy {
+    animation: none;
+  }
+}

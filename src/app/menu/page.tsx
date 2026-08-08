@@ -18,10 +18,10 @@ function MenuRedirect() {
   }, [restaurantId, router]);
 
   return (
-    <div className="min-h-screen bg-white flex items-center justify-center">
-      <div className="text-center">
-        <div className="inline-block w-12 h-12 border-4 border-[#CD3625] border-t-transparent rounded-full animate-spin"></div>
-        <p className="text-gray-500 text-lg mt-4">Redirecting...</p>
+    <div className="flex min-h-screen items-center justify-center bg-[#fbfaf8]">
+      <div className="rounded-2xl border border-[#e9dfda] bg-white px-8 py-7 text-center shadow-[0_18px_45px_rgba(55,35,27,0.08)]">
+        <div className="inline-block h-9 w-9 animate-spin rounded-full border-3 border-[#CD3625] border-t-transparent" />
+        <p className="mt-4 text-sm font-bold text-[#6d625c]">Opening the restaurant menu…</p>
       </div>
     </div>
   );
@@ -30,10 +30,10 @@ function MenuRedirect() {
 export default function MenuPage() {
   return (
     <Suspense fallback={
-      <div className="min-h-screen bg-white flex items-center justify-center">
+      <div className="flex min-h-screen items-center justify-center bg-[#fbfaf8]">
         <div className="text-center">
-          <div className="inline-block w-12 h-12 border-4 border-[#CD3625] border-t-transparent rounded-full animate-spin"></div>
-          <p className="text-gray-500 text-lg mt-4">Loading...</p>
+          <div className="inline-block h-9 w-9 animate-spin rounded-full border-3 border-[#CD3625] border-t-transparent" />
+          <p className="mt-4 text-sm font-bold text-[#6d625c]">Loading menu…</p>
         </div>
       </div>
     }>

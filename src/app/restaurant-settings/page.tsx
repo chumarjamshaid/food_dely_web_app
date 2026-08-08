@@ -413,6 +413,18 @@ function OpeningsTab({ restaurant }: { restaurant: RestaurantOwnerProfile }) {
     value: string
   ) => setShifts((p) => p.map((s, i) => (i === idx ? { ...s, [field]: value } : s)));
 
+  const setAlwaysOpen = () => {
+    setShifts(
+      DAYS.map((day) => ({
+        day: day.key,
+        start: "00:00",
+        end: "23:59",
+      }))
+    );
+    setError(null);
+    setSuccess(false);
+  };
+
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -449,13 +461,22 @@ function OpeningsTab({ restaurant }: { restaurant: RestaurantOwnerProfile }) {
 
   return (
     <form onSubmit={submit} className="space-y-6">
-      <div>
-        <h2 className="text-2xl font-semibold text-black mb-1">
-          Opening Hours
-        </h2>
-        <p className="text-sm text-gray-600">
-          Add one or more shifts per day. Leaving a day empty means closed.
-        </p>
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h2 className="mb-1 text-2xl font-semibold text-black">
+            Opening Hours
+          </h2>
+          <p className="text-sm text-gray-600">
+            Add one or more shifts per day. Leaving a day empty means closed.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={setAlwaysOpen}
+          className="shrink-0 rounded-full border border-[#CD3625]/25 bg-[#fff3ef] px-5 py-2.5 text-sm font-bold text-[#b63825] transition hover:-translate-y-0.5 hover:border-[#CD3625] hover:bg-[#ffe9e2]"
+        >
+          Set open 24/7
+        </button>
       </div>
 
       <div className="space-y-6">

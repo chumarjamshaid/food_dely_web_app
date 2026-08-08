@@ -1,51 +1,76 @@
 "use client";
 import {
   useAddToCart,
-  useAuth,
   useCancelOrder,
   useCart,
-  useLogout,
   useOrderDetail,
+  useOrderStatus,
 } from "@/lib/api";
+import SafeImage from "@/components/SafeImage";
 import type { OrderStatus } from "@/lib/api/types";
-import Image from "next/image";
+import { ArrowLeft, Bike, Check, ChefHat, Clock3, MapPin, PackageCheck, PartyPopper, ShoppingBag, XCircle } from "lucide-react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useState } from "react";
 
 const statusColors: Record<OrderStatus, { bg: string; text: string }> = {
-  PLACED: { bg: "bg-blue-100", text: "text-blue-800" },
-  PREPARING: { bg: "bg-yellow-100", text: "text-yellow-800" },
-  DELIVERED: { bg: "bg-green-100", text: "text-green-800" },
-  COMPLETED: { bg: "bg-gray-100", text: "text-gray-800" },
-  CANCELLED: { bg: "bg-red-100", text: "text-red-800" },
+  placed: { bg: "bg-blue-100", text: "text-blue-800" },
+  preparing: { bg: "bg-yellow-100", text: "text-yellow-800" },
+  ready: { bg: "bg-orange-100", text: "text-orange-800" },
+  delivering: { bg: "bg-amber-100", text: "text-amber-800" },
+  completed: { bg: "bg-green-100", text: "text-green-800" },
+  can_cust: { bg: "bg-red-100", text: "text-red-800" },
+  can_rest: { bg: "bg-red-100", text: "text-red-800" },
 };
 
 const statusLabels: Record<OrderStatus, string> = {
-  PLACED: "Order Placed",
-  PREPARING: "Preparing",
-  DELIVERED: "Delivered",
-  COMPLETED: "Completed",
-  CANCELLED: "Cancelled",
+  placed: "Order placed",
+  preparing: "Preparing",
+  ready: "Ready",
+  delivering: "On the way",
+  completed: "Completed",
+  can_cust: "Cancelled by you",
+  can_rest: "Cancelled by restaurant",
 };
+
+const statusExperience = {
+  placed: { icon: Clock3, eyebrow: "Order received", title: "Your order is in", copy: "The restaurant has received your order and will begin shortly.", gradient: "from-blue-600 to-indigo-700", glow: "bg-blue-400" },
+  preparing: { icon: ChefHat, eyebrow: "In the kitchen", title: "Freshly preparing", copy: "Your meal is being prepared with care right now.", gradient: "from-orange-500 to-[#c83b2b]", glow: "bg-orange-300" },
+  ready: { icon: PackageCheck, eyebrow: "Packed and ready", title: "Ready to leave", copy: "Everything is packed and waiting for its journey to you.", gradient: "from-amber-500 to-orange-600", glow: "bg-amber-300" },
+  delivering: { icon: Bike, eyebrow: "On the move", title: "Heading your way", copy: "Your order has left the restaurant and is on its way.", gradient: "from-violet-600 to-indigo-700", glow: "bg-violet-300" },
+  completed: { icon: PartyPopper, eyebrow: "Delivered", title: "Enjoy your meal", copy: "Your order has arrived. We hope every bite is worth it.", gradient: "from-emerald-500 to-teal-700", glow: "bg-emerald-300" },
+  can_cust: { icon: XCircle, eyebrow: "Order cancelled", title: "Cancelled by you", copy: "This order is no longer being prepared or delivered.", gradient: "from-rose-600 to-red-800", glow: "bg-rose-300" },
+  can_rest: { icon: XCircle, eyebrow: "Order cancelled", title: "Cancelled by restaurant", copy: "The restaurant could not complete this order.", gradient: "from-rose-600 to-red-800", glow: "bg-rose-300" },
+} satisfies Record<OrderStatus, { icon: typeof Clock3; eyebrow: string; title: string; copy: string; gradient: string; glow: string }>;
 
 export default function OrderDetailPage() {
   const params = useParams();
   const router = useRouter();
   const orderId = params.id ? parseInt(params.id as string, 10) : 0;
 
-  const { isAuthenticated, user, isLoading: authLoading } = useAuth();
-  const logout = useLogout();
   const { data: cart } = useCart();
   const { data: order, isLoading: orderLoading, error } = useOrderDetail(orderId);
+  const { data: liveStatus } = useOrderStatus(
+    orderId,
+    Boolean(order) && !["completed", "can_cust", "can_rest"].includes(order?.status ?? ""),
+    10_000,
+  );
   const cancelOrder = useCancelOrder();
   const addToCart = useAddToCart();
 
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
 
-  const canCancel = order && (order.status === "PLACED" || order.status === "PREPARING");
-  const statusStyle = order ? (statusColors[order.status] || statusColors.PLACED) : statusColors.PLACED;
+  const currentStatus = liveStatus?.status ?? order?.status ?? "placed";
+  const canCancel = order && (currentStatus === "placed" || currentStatus === "preparing");
+  const statusStyle = statusColors[currentStatus] || statusColors.placed;
+  const experience = statusExperience[currentStatus] || statusExperience.placed;
+  const StatusIcon = experience.icon;
+  const orderTotal = Number(order?.total ?? order?.price ?? 0);
+  const delivery = order?.delivery ?? (order?.delivery_firstname ? {
+    firstname: order.delivery_firstname, lastname: order.delivery_lastname ?? "", address: order.delivery_address ?? "",
+    postal_code: order.delivery_postal_code ?? "", city: order.delivery_city ?? "", phone: order.delivery_phone, email: order.delivery_email,
+  } : undefined);
 
   const handleReorder = async () => {
     if (!order) return;
@@ -84,92 +109,40 @@ export default function OrderDetailPage() {
     );
   };
 
-  // Redirect to signin if not authenticated
-  if (!authLoading && !isAuthenticated) {
-    router.push("/signin?redirect=/orders");
-    return null;
-  }
-
   return (
-    <div className="bg-white">
-      <div className="min-h-screen flex flex-col max-w-[1400px] mx-auto">
+    <div className="min-h-screen bg-[#fbfaf8] text-[#241f1c]">
+      <div className="min-h-screen">
         {/* Header */}
-        <header className="fixed top-0 left-0 w-full z-50 bg-white border-b border-gray-400">
-          <div className="max-w-[1400px] mx-auto flex items-center justify-between px-4 sm:px-6 lg:px-8 py-4 lg:py-6 min-h-[64px]">
-            <button className="mr-4 lg:mr-6 flex items-center justify-center w-10 h-10 rounded-lg hover:bg-gray-100 cursor-pointer">
-              <Image
-                src="/images/menu-icon.svg"
-                alt="Menu"
-                width={32}
-                height={32}
-              />
-            </button>
-
-            <Link href="/" className="flex items-center mr-4 lg:mr-8 cursor-pointer">
-              <span
-                className="text-[20px] sm:text-[24px] lg:text-[32px] font-extrabold select-none"
-                style={{ fontFamily: "Abril Fatface, serif" }}
-              >
-                <span className="text-[#CD3625]">FOOD</span>
-                <span className="text-black">DELY</span>
-              </span>
+        <header className="sticky top-0 z-50 border-b border-[#ece3de] bg-white/90 backdrop-blur-xl">
+          <div className="mx-auto grid min-h-[72px] max-w-6xl grid-cols-[1fr_auto_1fr] items-center px-4 sm:px-8">
+            <Link href="/orders" className="flex w-fit items-center gap-2 rounded-xl px-2 py-2 text-sm font-bold text-[#665b55] transition hover:bg-[#f7f1ee] hover:text-[#b63825]">
+              <ArrowLeft size={18} />
+              <span className="hidden sm:inline">All orders</span>
             </Link>
 
-            <div className="flex-1" />
+            <Link href="/" className="text-[24px] font-black tracking-[-0.04em]">
+              <span className="text-[#c83b2b]">FOOD</span>DELY
+            </Link>
 
-            <div className="flex items-center gap-3 mr-4 lg:mr-6">
-              <Link href="/cart" className="relative flex items-center justify-center w-12 h-12 lg:w-14 lg:h-14 rounded-full bg-[#F7F8FD] cursor-pointer hover:bg-gray-100 transition">
-                <Image
-                  src="/images/cart-icon.svg"
-                  alt="Cart"
-                  width={20}
-                  height={20}
-                  className="lg:w-6 lg:h-6"
-                />
+            <div className="flex justify-end">
+              <Link href="/cart" className="relative flex h-10 w-10 items-center justify-center rounded-xl bg-[#fff0eb] text-[#b63825]">
+                <ShoppingBag size={20} />
                 {cart?.items && cart.items.length > 0 && (
-                  <div className="absolute -top-1 -right-1 bg-[#CD3625] text-white text-xs font-bold w-5 h-5 flex items-center justify-center rounded-full border-2 border-white">
+                  <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-[#c83b2b] px-1 text-[10px] font-black text-white">
                     {cart.items.reduce((sum, item) => sum + item.quantity, 0)}
-                  </div>
+                  </span>
                 )}
               </Link>
-            </div>
-
-            <div className="hidden md:flex items-center gap-8">
-              {!authLoading && isAuthenticated && (
-                <div className="flex items-center gap-4">
-                  <Link
-                    href="/orders"
-                    className="text-[#CD3625] text-[16px] font-medium"
-                  >
-                    Orders
-                  </Link>
-                  <Link
-                    href="/profile"
-                    className="text-black text-[16px] hover:text-gray-600 font-medium"
-                  >
-                    {user?.firstname || "Profile"}
-                  </Link>
-                  <button
-                    onClick={() => {
-                      logout();
-                      window.location.href = "/";
-                    }}
-                    className="bg-gray-200 text-black px-4 py-2 rounded-full font-medium hover:bg-gray-300 transition text-sm"
-                  >
-                    Logout
-                  </button>
-                </div>
-              )}
             </div>
           </div>
         </header>
 
         {/* Main Content */}
-        <main className="w-full mx-auto px-4 pb-8 pt-24 sm:pt-28 lg:pt-32">
+        <main className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-8 sm:py-12">
           {/* Back Button */}
           <button
             onClick={() => router.push("/orders")}
-            className="inline-flex items-center gap-2 text-[#CD3625] hover:text-red-600 font-medium transition mb-6"
+            className="mb-6 inline-flex items-center gap-2 text-sm font-bold text-[#b63825] transition hover:text-[#8f2d20]"
           >
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
               <path d="M19 12H5M12 19l-7-7 7-7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
@@ -199,83 +172,99 @@ export default function OrderDetailPage() {
               {/* Main Order Info */}
               <div className="lg:col-span-2 space-y-6">
                 {/* Order Header */}
-                <div className="bg-white rounded-2xl shadow p-6">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-                    <div>
-                      <h1 className="text-2xl font-bold text-[#222]">Order #{order.id}</h1>
-                      <p className="text-gray-500 mt-1">
-                        Placed on {new Date(order.created_at).toLocaleDateString("en-US", {
+                <div className="overflow-hidden rounded-[28px] border border-[#e9dfda] bg-white shadow-[0_20px_55px_rgba(55,35,27,0.09)]">
+                  <div className={`relative overflow-hidden bg-gradient-to-br ${experience.gradient} p-6 text-white sm:p-8`}>
+                    <div className={`absolute -right-12 -top-12 h-48 w-48 rounded-full ${experience.glow} opacity-30 blur-3xl motion-safe:animate-pulse`} />
+                    <div className="absolute inset-0 opacity-20 [background-image:radial-gradient(circle_at_center,white_1px,transparent_1px)] [background-size:22px_22px]" />
+                    <div className="relative flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
+                      <div className="flex items-center gap-4">
+                        <div className="relative flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl border border-white/25 bg-white/15 backdrop-blur sm:h-20 sm:w-20">
+                          {!['completed','can_cust','can_rest'].includes(currentStatus) && <span className="absolute inset-0 rounded-2xl border border-white/50 motion-safe:animate-ping" />}
+                          <StatusIcon size={32} className={currentStatus === 'delivering' ? 'motion-safe:animate-bounce' : currentStatus === 'preparing' ? 'motion-safe:animate-pulse' : ''} />
+                        </div>
+                        <div>
+                          <p className="text-xs font-black uppercase tracking-[0.2em] text-white/70">{experience.eyebrow}</p>
+                          <h1 className="mt-1 text-3xl font-black tracking-[-0.04em] sm:text-4xl">{experience.title}</h1>
+                          <p className="mt-2 max-w-xl text-sm leading-6 text-white/80">{experience.copy}</p>
+                        </div>
+                      </div>
+                      <div className="shrink-0 rounded-2xl border border-white/20 bg-black/15 px-4 py-3 backdrop-blur">
+                        <p className="text-[10px] font-black uppercase tracking-[0.16em] text-white/60">Order number</p>
+                        <p className="mt-1 text-xl font-black">#{order.id}</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="p-5 sm:p-7">
+                    <div className="mb-7 flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
+                      <p className="text-sm font-semibold text-[#756a65]">
+                        Placed on {order.placed || (order.created_at ? new Date(order.created_at).toLocaleDateString("en-US", {
                           year: "numeric",
                           month: "long",
                           day: "numeric",
                           hour: "2-digit",
                           minute: "2-digit",
-                        })}
+                        }) : "Recently")}
                       </p>
+                      <span className={`w-fit rounded-full px-4 py-2 text-sm font-black ${statusStyle.bg} ${statusStyle.text}`}>{statusLabels[currentStatus]}</span>
                     </div>
-                    <span className={`px-4 py-2 rounded-full text-sm font-semibold ${statusStyle.bg} ${statusStyle.text}`}>
-                      {statusLabels[order.status]}
-                    </span>
-                  </div>
 
                   {/* Order Status Timeline */}
-                  <div className="flex items-center justify-between mb-6 overflow-x-auto pb-2">
-                    {["PLACED", "PREPARING", "DELIVERED", "COMPLETED"].map((status, index) => {
-                      const isActive = ["PLACED", "PREPARING", "DELIVERED", "COMPLETED"].indexOf(order.status) >= index;
-                      const isCancelled = order.status === "CANCELLED";
+                  <div className="mb-2 grid grid-cols-5 gap-1 sm:gap-2">
+                    {(["placed", "preparing", "ready", "delivering", "completed"] as OrderStatus[]).map((status, index) => {
+                      const isActive = ["placed", "preparing", "ready", "delivering", "completed"].indexOf(currentStatus) >= index;
+                      const isCurrent = status === currentStatus;
+                      const isCancelled = currentStatus === "can_cust" || currentStatus === "can_rest";
                       return (
-                        <div key={status} className="flex items-center">
-                          <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                        <div key={status} className="relative min-w-0 text-center">
+                          {index < 4 && <span className={`absolute left-[55%] top-5 h-0.5 w-[90%] ${isActive && !isCancelled ? 'bg-[#CD3625]' : 'bg-[#e7ded9]'}`} />}
+                          <div className={`relative mx-auto flex h-10 w-10 items-center justify-center rounded-xl transition-all duration-700 ${
                             isCancelled ? "bg-gray-200" : isActive ? "bg-[#CD3625]" : "bg-gray-200"
-                          }`}>
+                          } ${isCurrent ? 'scale-110 shadow-[0_0_0_6px_rgba(205,54,37,.12)]' : ''}`}>
                             {isActive && !isCancelled ? (
-                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-                                <path d="M5 12l5 5L20 7" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                              </svg>
+                              isCurrent && status !== 'completed' ? <span className="h-2.5 w-2.5 rounded-full bg-white motion-safe:animate-pulse" /> : <Check size={17} className="text-white" />
                             ) : (
                               <span className="text-gray-500 text-xs">{index + 1}</span>
                             )}
                           </div>
-                          {index < 3 && (
-                            <div className={`w-12 sm:w-20 h-1 ${
-                              isCancelled ? "bg-gray-200" : isActive ? "bg-[#CD3625]" : "bg-gray-200"
-                            }`}></div>
-                          )}
+                          <p className={`mt-3 text-[9px] font-black leading-3 sm:text-[11px] ${isActive && !isCancelled ? "text-[#b63825]" : "text-[#91857e]"}`}>
+                            {statusLabels[status]}
+                          </p>
                         </div>
                       );
                     })}
                   </div>
+                  {!["completed", "can_cust", "can_rest"].includes(currentStatus) && (
+                    <p className="mt-5 flex items-center gap-2 rounded-xl bg-[#fff7f3] px-3 py-3 text-xs font-semibold text-[#7c5148]">
+                      <Clock3 size={15} className="text-[#b63825]" />
+                      Status refreshes automatically every 10 seconds.
+                    </p>
+                  )}
 
                   {/* Cancelled Reason */}
-                  {order.status === "CANCELLED" && order.cancel_reason && (
+                  {(currentStatus === "can_cust" || currentStatus === "can_rest") && (order.status_reason || order.cancel_reason) && (
                     <div className="bg-red-50 border border-red-200 rounded-xl p-4">
                       <p className="text-red-800 font-medium text-sm">Cancellation Reason:</p>
-                      <p className="text-red-700 text-sm mt-1">{order.cancel_reason}</p>
+                      <p className="text-red-700 text-sm mt-1">{order.status_reason || order.cancel_reason}</p>
                     </div>
                   )}
+                  </div>
                 </div>
 
                 {/* Order Items */}
-                <div className="bg-white rounded-2xl shadow p-6">
+                <div className="rounded-[24px] border border-[#e9dfda] bg-white p-6 shadow-[0_14px_38px_rgba(55,35,27,0.06)]">
                   <h2 className="text-lg font-semibold text-[#222] mb-4">Order Items</h2>
                   <div className="space-y-4">
                     {order.items.map((item) => (
                       <div key={item.id} className="flex items-center gap-4 p-4 bg-gray-50 rounded-xl">
                         <div className="w-20 h-20 rounded-xl overflow-hidden relative flex-shrink-0 bg-gray-200">
-                          {(item.menu_item?.image || item.nowaste_item?.image) ? (
-                            <Image
-                              src={item.menu_item?.image || item.nowaste_item?.image || "/images/default-food.png"}
-                              alt={item.menu_item?.name || item.nowaste_item?.name || "Item"}
-                              fill
-                              className="object-cover"
-                            />
-                          ) : (
-                            <div className="w-full h-full flex items-center justify-center text-gray-400">
-                              <svg width="32" height="32" viewBox="0 0 24 24" fill="none">
-                                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z" fill="currentColor"/>
-                              </svg>
-                            </div>
-                          )}
+                          <SafeImage
+                            src={item.menu_item?.image || item.nowaste_item?.image}
+                            alt={item.menu_item?.name || item.nowaste_item?.name || "Item"}
+                            fill
+                            className="object-cover"
+                            fallbackClassName="object-contain bg-[#fff8f5] p-4"
+                          />
                         </div>
                         <div className="flex-1">
                           <h3 className="font-medium text-[#222]">
@@ -294,7 +283,7 @@ export default function OrderDetailPage() {
                           <p className="text-gray-600 text-sm mt-1">Qty: {item.quantity}</p>
                         </div>
                         <div className="text-right">
-                          <p className="font-semibold text-[#222]">${item.price.toFixed(2)}</p>
+                          <p className="font-semibold text-[#222]">{Number(item.price).toFixed(2)} CHF</p>
                         </div>
                       </div>
                     ))}
@@ -305,50 +294,50 @@ export default function OrderDetailPage() {
               {/* Sidebar */}
               <div className="space-y-6">
                 {/* Order Summary */}
-                <div className="bg-white rounded-2xl shadow p-6">
-                  <h2 className="text-lg font-semibold text-[#222] mb-4">Order Summary</h2>
+                <div className="rounded-[22px] border border-[#3a2b26] bg-[#241b18] p-6 text-white shadow-[0_20px_50px_rgba(42,28,22,0.16)]">
+                  <h2 className="mb-4 text-lg font-black text-white">Order summary</h2>
                   <div className="space-y-3 text-sm">
                     <div className="flex justify-between">
-                      <span className="text-gray-600">Subtotal</span>
-                      <span className="font-medium">${order.price.toFixed(2)}</span>
+                      <span className="text-stone-400">Subtotal</span>
+                      <span className="font-medium">{Number(order.subtotal ?? orderTotal).toFixed(2)} CHF</span>
                     </div>
-                    <div className="border-t border-gray-200 my-3"></div>
+                    <div className="my-3 border-t border-white/10"></div>
                     <div className="flex justify-between text-lg">
-                      <span className="font-semibold text-[#222]">Total</span>
-                      <span className="font-bold text-[#222]">${order.price.toFixed(2)}</span>
+                      <span className="font-semibold text-white">Total</span>
+                      <span className="font-bold text-white">{orderTotal.toFixed(2)} CHF</span>
                     </div>
                   </div>
                 </div>
 
                 {/* Delivery Info */}
-                {order.delivery && (
-                  <div className="bg-white rounded-2xl shadow p-6">
-                    <h2 className="text-lg font-semibold text-[#222] mb-4">Delivery Information</h2>
+                {delivery && (
+                  <div className="rounded-[22px] border border-[#e9dfda] bg-white p-6">
+                    <h2 className="mb-4 flex items-center gap-2 text-lg font-black"><MapPin size={18} className="text-[#b63825]" /> Delivery information</h2>
                     <div className="space-y-3 text-sm">
                       <div>
                         <span className="text-gray-600">Name:</span>
-                        <p className="font-medium">{order.delivery.firstname} {order.delivery.lastname}</p>
+                        <p className="font-medium">{delivery.firstname} {delivery.lastname}</p>
                       </div>
-                      {order.delivery.address && (
+                      {delivery.address && (
                         <div>
                           <span className="text-gray-600">Address:</span>
                           <p className="font-medium">
-                            {order.delivery.address}
+                            {delivery.address}
                             <br />
-                            {order.delivery.postal_code} {order.delivery.city}
+                            {delivery.postal_code} {delivery.city}
                           </p>
                         </div>
                       )}
-                      {order.delivery.phone && (
+                      {delivery.phone && (
                         <div>
                           <span className="text-gray-600">Phone:</span>
-                          <p className="font-medium">{order.delivery.phone}</p>
+                          <p className="font-medium">{delivery.phone}</p>
                         </div>
                       )}
-                      {order.delivery.email && (
+                      {delivery.email && (
                         <div>
                           <span className="text-gray-600">Email:</span>
-                          <p className="font-medium">{order.delivery.email}</p>
+                          <p className="font-medium">{delivery.email}</p>
                         </div>
                       )}
                     </div>
@@ -356,8 +345,8 @@ export default function OrderDetailPage() {
                 )}
 
                 {/* Actions */}
-                <div className="bg-white rounded-2xl shadow p-6">
-                  <h2 className="text-lg font-semibold text-[#222] mb-4">Actions</h2>
+                <div className="rounded-[22px] border border-[#e9dfda] bg-white p-6">
+                  <h2 className="mb-4 flex items-center gap-2 text-lg font-black"><PackageCheck size={18} className="text-[#b63825]" /> Order actions</h2>
                   <div className="space-y-3">
                     <button
                       onClick={handleReorder}

@@ -13,6 +13,18 @@ export function getSessionId(): string | null {
   return localStorage.getItem(SESSION_ID_KEY);
 }
 
+/** Return the stable anonymous checkout identity, creating it on first use. */
+export function getOrCreateSessionId(): string | null {
+  if (typeof window === 'undefined') return null;
+  const existing = getSessionId();
+  if (existing) return existing;
+  const generated = typeof crypto !== 'undefined' && 'randomUUID' in crypto
+    ? crypto.randomUUID()
+    : `guest-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  setSessionId(generated);
+  return generated;
+}
+
 /**
  * Store the session ID in localStorage
  */

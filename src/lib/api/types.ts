@@ -107,6 +107,8 @@ export interface MenuItemOptionGroupResponse {
   name: string;
   multiple: boolean;
   required: boolean; // New field - true means option is mandatory
+  minimum_selections?: number;
+  maximum_selections?: number;
   items: MenuItemOptionResponse[];
 }
 
@@ -116,6 +118,7 @@ export interface MenuItemOptionResponse {
   description: string;
   price: number;
   allergies: string[];
+  available?: boolean;
 }
 
 // Customer types
@@ -126,6 +129,7 @@ export interface CustomerProfile {
   email: string;
   phone: string;
   birthday: string;
+  addresses?: CustomerAddress[];
 }
 
 export interface CustomerRegisterData {
@@ -191,7 +195,17 @@ export interface CartResponse {
   customer: number | null;
   session_id: string | null;
   items: CartItemResponse[];
-  total_price: string;
+  subtotal: string | number;
+  restaurant_discount: string | number;
+  delivery_fee: string | number;
+  promo_code: string | null;
+  promo_discount: string | number;
+  promo_error?: string | null;
+  tip_amount: string | number;
+  total: string | number;
+  currency: string;
+  /** Compatibility with responses from older deployments. */
+  total_price?: string;
 }
 
 export interface CartItemResponse {
@@ -244,11 +258,13 @@ export interface RestaurantQueryParams {
 
 // Order types
 export type OrderStatus =
-  | "PLACED"
-  | "PREPARING"
-  | "DELIVERED"
-  | "COMPLETED"
-  | "CANCELLED";
+  | "placed"
+  | "preparing"
+  | "ready"
+  | "delivering"
+  | "completed"
+  | "can_cust"
+  | "can_rest";
 
 export interface OrderDelivery {
   firstname: string;
@@ -278,15 +294,32 @@ export interface OrderItem {
 export interface OrderListItem {
   id: number;
   status: OrderStatus;
-  price: number;
-  created_at: string;
+  price: number | string;
+  placed: string;
+  created_at?: string;
   items: OrderItem[];
 }
 
 export interface OrderDetailResponse extends OrderListItem {
-  delivery: OrderDelivery;
+  delivery?: OrderDelivery;
+  delivery_firstname?: string;
+  delivery_lastname?: string;
+  delivery_address?: string;
+  delivery_postal_code?: string;
+  delivery_city?: string;
+  delivery_phone?: string;
+  delivery_email?: string;
+  subtotal?: string | number;
+  restaurant_discount?: string | number;
+  delivery_fee?: string | number;
+  promo_code?: string | null;
+  promo_discount?: string | number;
+  tip_amount?: string | number;
+  total?: string | number;
+  currency?: string;
   updated_at?: string;
   cancel_reason?: string;
+  status_reason?: string | null;
 }
 
 export interface OrderStatusResponse {
@@ -318,6 +351,7 @@ export interface PaymentIntentRequest {
   delivery_city?: string;
   delivery_phone?: string;
   delivery_email?: string;
+  tip_amount?: number;
 }
 
 export interface PaymentIntentResponse {
@@ -330,6 +364,13 @@ export interface PaymentIntentResponse {
   client_secret?: string;
   cart_id?: number;
   total_price?: string;
+  subtotal?: string | number;
+  restaurant_discount?: string | number;
+  delivery_fee?: string | number;
+  promo_discount?: string | number;
+  tip_amount?: string | number;
+  total?: string | number;
+  currency?: string;
 }
 
 export interface PaymentConfirmRequest {
@@ -354,13 +395,27 @@ export interface CreateCustomerAddressRequest {
   address: string;
   postal_code: string;
   city: string;
-  default: boolean;
+  default?: boolean;
+  latitude?: number;
+  longitude?: number;
 }
+
+export type UpdateCustomerAddressRequest = Partial<CreateCustomerAddressRequest>;
 
 // Query parameter types
 export interface RestaurantQueryParams {
   search?: string;
   category?: number;
+  delivery?: boolean;
+  pickup?: boolean;
+  reviews?: number;
+  nowaste?: boolean;
+  discounts?: boolean;
+  allergies?: string;
+  open?: boolean;
+  lat?: number;
+  lng?: number;
+  address?: string;
 }
 
 // API Error type

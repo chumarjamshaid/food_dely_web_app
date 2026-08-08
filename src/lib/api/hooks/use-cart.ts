@@ -1,7 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../client";
-import { getSessionId, isAuthenticated, setSessionId } from "../session";
-import type { AddToCartRequest, CartResponse } from "../types";
+import { getOrCreateSessionId, getSessionId, isAuthenticated, setSessionId } from "../session";
+import type {
+  AddToCartRequest,
+  CartItemResponse,
+  CartResponse,
+} from "../types";
 
 // Query keys for cart
 export const cartKeys = {
@@ -38,6 +42,14 @@ async function fetchCart(): Promise<CartResponse> {
           customer: null,
           session_id: null,
           items: [],
+          subtotal: "0.00",
+          restaurant_discount: "0.00",
+          delivery_fee: "0.00",
+          promo_code: null,
+          promo_discount: "0.00",
+          tip_amount: "0.00",
+          total: "0.00",
+          currency: "CHF",
           total_price: "0.00"
         };
       }
@@ -52,7 +64,7 @@ async function addToCart(data: AddToCartRequest): Promise<CartResponse> {
   formData.append("data", JSON.stringify(data));
 
   // For anonymous users, include session_id as query parameter (required by backend)
-  const sessionId = !isAuthenticated() ? getSessionId() : null;
+  const sessionId = !isAuthenticated() ? getOrCreateSessionId() : null;
   const params = sessionId ? { session_id: sessionId } : undefined;
 
   const response = await apiClient.post<CartResponse>(
@@ -102,30 +114,19 @@ async function removeFromCart(cartItemId: number): Promise<CartResponse> {
   return cartData;
 }
 
-// Update cart item quantity
-async function updateCartItem(cartItemId: number, quantity: number): Promise<CartResponse> {
+async function updateCartItem(
+  cartItem: CartItemResponse,
+  quantity: number,
+): Promise<CartResponse> {
+  if (quantity <= 0) return removeFromCart(cartItem.id);
   const formData = new FormData();
-  formData.append("cart_item", cartItemId.toString());
-  formData.append("quantity", quantity.toString());
-
-  // For anonymous users, include session_id as query parameter (required by backend)
-  const sessionId = !isAuthenticated() ? getSessionId() : null;
-  const params = sessionId ? { session_id: sessionId } : undefined;
-
-  const response = await apiClient.patch<CartResponse>("/api/app/cart/", formData, {
-    params, // Pass session_id as query parameter
-    headers: {
-      "Content-Type": "multipart/form-data",
-    },
+  formData.append("data", JSON.stringify({ quantity }));
+  const sessionId = !isAuthenticated() ? getOrCreateSessionId() : null;
+  const response = await apiClient.patch<CartResponse>(`/api/app/cart/items/${cartItem.id}/`, formData, {
+    params: sessionId ? { session_id: sessionId } : undefined,
+    headers: { "Content-Type": "multipart/form-data" },
   });
-  const cartData = response.data;
-
-  // Store session_id for anonymous users
-  if (!isAuthenticated() && cartData.session_id) {
-    setSessionId(cartData.session_id);
-  }
-
-  return cartData;
+  return response.data;
 }
 
 /**
@@ -136,8 +137,10 @@ export function useCart() {
     queryKey: cartKeys.current(),
     queryFn: fetchCart,
     refetchOnWindowFocus: false, // Prevent refetch on window focus
-    refetchOnMount: false, // Prevent refetch on component mount if data exists
-    staleTime: 30 * 1000, // Consider data fresh for 30 seconds
+    // Payment confirmation can clear the backend cart. Always reconcile cached
+    // data when entering cart/checkout so a stale cart cannot be paid twice.
+    refetchOnMount: "always",
+    staleTime: 0,
   });
 }
 
@@ -192,8 +195,13 @@ export function useUpdateCartItem() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ cartItemId, quantity }: { cartItemId: number; quantity: number }) =>
-      updateCartItem(cartItemId, quantity),
+    mutationFn: ({
+      cartItem,
+      quantity,
+    }: {
+      cartItem: CartItemResponse;
+      quantity: number;
+    }) => updateCartItem(cartItem, quantity),
     onSuccess: (data) => {
       // Update cart cache with new data
       queryClient.setQueryData(cartKeys.current(), data);
@@ -203,6 +211,32 @@ export function useUpdateCartItem() {
       queryClient.invalidateQueries({ queryKey: cartKeys.current() });
     },
   });
+}
+
+async function applyPromoCode(code: string): Promise<CartResponse> {
+  const sessionId = !isAuthenticated() ? getOrCreateSessionId() : null;
+  const response = await apiClient.post<CartResponse>("/api/app/cart/promo-code/", { code: code.trim() }, {
+    params: sessionId ? { session_id: sessionId } : undefined,
+  });
+  return response.data;
+}
+
+async function removePromoCode(): Promise<CartResponse> {
+  const sessionId = !isAuthenticated() ? getOrCreateSessionId() : null;
+  const response = await apiClient.delete<CartResponse>("/api/app/cart/promo-code/", {
+    params: sessionId ? { session_id: sessionId } : undefined,
+  });
+  return response.data;
+}
+
+export function useApplyPromoCode() {
+  const queryClient = useQueryClient();
+  return useMutation({ mutationFn: applyPromoCode, onSuccess: data => queryClient.setQueryData(cartKeys.current(), data) });
+}
+
+export function useRemovePromoCode() {
+  const queryClient = useQueryClient();
+  return useMutation({ mutationFn: removePromoCode, onSuccess: data => queryClient.setQueryData(cartKeys.current(), data) });
 }
 
 /**

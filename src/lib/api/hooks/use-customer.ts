@@ -3,9 +3,10 @@ import {
   apiClient,
   clearAuthToken,
   hasAuthToken,
-  setAuthToken,
+  setAuthRole,
+  setAuthTokens,
 } from "../client";
-import { clearSessionId } from "../session";
+import { clearSessionId, getOrCreateSessionId } from "../session";
 import type {
   CustomerProfile,
   CustomerRegisterData,
@@ -30,7 +31,7 @@ async function registerCustomer(
 ): Promise<CustomerProfile> {
   // Backend expects form-data with a 'data' field containing JSON
   const formData = new FormData();
-  formData.append("data", JSON.stringify(data));
+  formData.append("data", JSON.stringify({ ...data, session_id: getOrCreateSessionId() }));
 
   const response = await apiClient.post<CustomerProfile>(
     "/api/app/customer/register/",
@@ -66,14 +67,8 @@ export function useCustomerProfile(enabled = true) {
  * Hook to register a new customer
  */
 export function useRegisterCustomer() {
-  const queryClient = useQueryClient();
-
   return useMutation({
     mutationFn: registerCustomer,
-    onSuccess: (data) => {
-      // Optionally set the profile in cache after registration
-      queryClient.setQueryData(customerKeys.profile(), data);
-    },
   });
 }
 
@@ -89,6 +84,7 @@ interface TokenResponse {
   access?: string;
   access_token?: string;
   token?: string;
+  refresh?: string;
   // Handle various response formats
 }
 
@@ -130,10 +126,14 @@ function detectOwnerHint(data: TokenResponseWithUser): boolean | null {
 }
 
 async function login(credentials: LoginCredentials): Promise<LoginResult> {
-  const tokenResponse = await apiClient.post<TokenResponseWithUser>(
-    "/api/token/",
-    credentials,
-  );
+  const sessionId = getOrCreateSessionId();
+  const tokenResponse = await apiClient.post<TokenResponseWithUser>("/api/token/", {
+    username: credentials.username.trim().toLowerCase(),
+    password: credentials.password,
+  }, {
+    params: sessionId ? { session_id: sessionId } : undefined,
+    headers: sessionId ? { "X-Session-ID": sessionId } : undefined,
+  });
 
   const token =
     tokenResponse.data.access ||
@@ -144,35 +144,37 @@ async function login(credentials: LoginCredentials): Promise<LoginResult> {
     throw new Error("Token not found in response");
   }
 
-  setAuthToken(token);
+  setAuthTokens(token, tokenResponse.data.refresh);
 
-  const ownerHint = detectOwnerHint(tokenResponse.data);
-
-  // If the hint says owner, fetch restaurant profile.
-  if (ownerHint === true) {
-    const r = await apiClient.get<RestaurantOwnerProfile>(
-      "/api/app/restaurant/",
-    );
-    return { role: "restaurant_owner", restaurant: r.data };
-  }
-
-  // If the hint says customer, fetch customer profile.
-  if (ownerHint === false) {
-    const c = await apiClient.get<CustomerProfile>("/api/app/customer/");
-    return { role: "customer", customer: c.data };
-  }
-
-  // Unknown role — probe restaurant endpoint first; on 404 fall back to customer.
   try {
-    const r = await apiClient.get<RestaurantOwnerProfile>(
-      "/api/app/restaurant/",
-    );
-    return { role: "restaurant_owner", restaurant: r.data };
-  } catch (err) {
-    const e = err as { response?: { status?: number } };
-    if (e?.response?.status !== 404) throw err;
-    const c = await apiClient.get<CustomerProfile>("/api/app/customer/");
-    return { role: "customer", customer: c.data };
+    const ownerHint = detectOwnerHint(tokenResponse.data);
+
+    if (ownerHint === true) {
+      const r = await apiClient.get<RestaurantOwnerProfile>("/api/app/restaurant/");
+      setAuthRole("restaurant_owner");
+      return { role: "restaurant_owner", restaurant: r.data };
+    }
+
+    if (ownerHint === false) {
+      const c = await apiClient.get<CustomerProfile>("/api/app/customer/");
+      setAuthRole("customer");
+      return { role: "customer", customer: c.data };
+    }
+
+    try {
+      const c = await apiClient.get<CustomerProfile>("/api/app/customer/");
+      setAuthRole("customer");
+      return { role: "customer", customer: c.data };
+    } catch (customerError) {
+      const customerResponse = customerError as { response?: { status?: number } };
+      if (customerResponse.response?.status !== 404) throw customerError;
+      const r = await apiClient.get<RestaurantOwnerProfile>("/api/app/restaurant/");
+      setAuthRole("restaurant_owner");
+      return { role: "restaurant_owner", restaurant: r.data };
+    }
+  } catch (profileError) {
+    clearAuthToken();
+    throw profileError;
   }
 }
 

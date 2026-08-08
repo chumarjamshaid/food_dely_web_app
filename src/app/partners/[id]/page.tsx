@@ -8,15 +8,27 @@ import {
   useRestaurantDetail
 } from "@/lib/api";
 import type { MenuItemResponse } from "@/lib/api/types";
+import SafeImage from "@/components/SafeImage";
 import {
   clearCartRestaurantId,
   getCartRestaurantId,
   setCartRestaurantId,
 } from "@/lib/cart-restaurant";
+import { getCartTotal } from "@/lib/cart-total";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { use, useEffect, useRef, useState } from "react";
+import {
+  ArrowLeft,
+  Clock3,
+  LogOut,
+  MapPin,
+  Plus,
+  ShoppingBag,
+  Star,
+  UserRound,
+} from "lucide-react";
 
 interface SelectedOptions {
   [itemId: number]: {
@@ -33,11 +45,9 @@ export default function PartnerDetailPage({ params }: { params: Promise<{ id: st
   const [selectedFoodCategoryId, setSelectedFoodCategoryId] = useState<number | "nowaste" | null>(null);
   const [selectedOptions, setSelectedOptions] = useState<SelectedOptions>({});
   const [showMissingOptions, setShowMissingOptions] = useState(false);
-  const [isMenuBarSticky, setIsMenuBarSticky] = useState(false);
   const [addingItemId, setAddingItemId] = useState<number | null>(null);
   const [addedMessage, setAddedMessage] = useState<string | null>(null);
   const [showRestaurantWarning, setShowRestaurantWarning] = useState(false);
-  const menuBarRef = useRef<HTMLDivElement>(null);
   const initialSelectionDone = useRef(false);
 
   // Authentication hooks
@@ -57,7 +67,7 @@ export default function PartnerDetailPage({ params }: { params: Promise<{ id: st
     ? {
         name: apiRestaurant.name,
         description: apiRestaurant.description || "",
-        image: apiRestaurant.images?.[0]?.image || "/images/pizza.png",
+        image: apiRestaurant.images?.[0]?.image || "/images/logo.png",
         address: apiRestaurant.address,
         city: apiRestaurant.city || "",
         rating: apiRestaurant.rating || 0,
@@ -81,19 +91,6 @@ export default function PartnerDetailPage({ params }: { params: Promise<{ id: st
       }
     }
   }, [apiRestaurant]);
-
-  // Sticky menu bar effect
-  useEffect(() => {
-    const handleScroll = () => {
-      if (menuBarRef.current) {
-        const rect = menuBarRef.current.getBoundingClientRect();
-        setIsMenuBarSticky(rect.top <= 0);
-      }
-    };
-
-    window.addEventListener('scroll', handleScroll);
-    return () => window.removeEventListener('scroll', handleScroll);
-  }, []);
 
   // Clear stored cart restaurant when cart becomes empty
   useEffect(() => {
@@ -156,16 +153,20 @@ export default function PartnerDetailPage({ params }: { params: Promise<{ id: st
     const itemOptions = selectedOptions[item.id] || {};
     const missingRequired = item.options?.filter(opt => {
       const value = itemOptions[opt.id];
-      if (!opt.required) return false;
-      if (value === undefined || value === null) return true;
-      if (Array.isArray(value) && value.length === 0) return true;
-      return false;
+      const count = Array.isArray(value) ? value.length : value == null ? 0 : 1;
+      return opt.items.length > 0 && count < (opt.minimum_selections ?? (opt.required ? 1 : 0));
     }) || [];
 
     if (missingRequired.length > 0) {
       setShowMissingOptions(true);
       return;
     }
+    const overLimit = item.options?.some(opt => {
+      const value = itemOptions[opt.id];
+      const count = Array.isArray(value) ? value.length : value == null ? 0 : 1;
+      return opt.maximum_selections != null && count > opt.maximum_selections;
+    });
+    if (overLimit) { setShowMissingOptions(true); return; }
 
     setAddingItemId(item.id);
 
@@ -268,13 +269,7 @@ export default function PartnerDetailPage({ params }: { params: Promise<{ id: st
 
   // Calculate totals from API cart
   const cartItems = apiCart?.items || [];
-  const subtotal = cartItems.reduce((sum, item) => {
-    const itemPrice = item.menu_item?.price || item.nowaste_item?.price || 0;
-    return sum + (itemPrice * item.quantity);
-  }, 0);
-  const deliveryFee = restaurant?.delivery_fee || 0;
-  const taxes = subtotal * 0.08; // 8% tax
-  const total = subtotal + deliveryFee + taxes;
+  const subtotal = getCartTotal(apiCart);
 
   // Show loading state
   if (isLoadingRestaurant) {
@@ -305,7 +300,7 @@ export default function PartnerDetailPage({ params }: { params: Promise<{ id: st
   const foodCategories = apiRestaurant?.foods || [];
 
   return (
-    <div className="bg-white">
+    <div className="min-h-screen bg-[#fbfaf8] text-[#241f1c]">
       {/* Popup warning when user tries to add items from a different restaurant */}
       {showRestaurantWarning && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4">
@@ -328,202 +323,163 @@ export default function PartnerDetailPage({ params }: { params: Promise<{ id: st
       )}
 
       {/* Header */}
-      <header className="fixed top-0 left-0 w-full z-50 bg-white border-b border-gray-400">
-        <div className="max-w-[1400px] mx-auto flex items-center justify-between px-4 sm:px-6 lg:px-8 py-4 lg:py-6 min-h-[64px]">
-          {/* Back Button */}
-          <button
-            onClick={() => router.push("/partners")}
-            className="mr-4 lg:mr-6 flex items-center justify-center w-10 h-10 rounded-lg hover:bg-gray-100 cursor-pointer"
+      <header className="fixed left-0 top-0 z-50 w-full border-b border-[#ece3de] bg-white/90 backdrop-blur-xl">
+        <div className="mx-auto grid min-h-[72px] max-w-6xl grid-cols-[1fr_auto_1fr] items-center gap-3 px-5 sm:px-8">
+          <Link
+            href="/partners"
+            className="flex h-10 w-fit items-center gap-2 rounded-xl px-2 text-sm font-bold text-[#5e544f] transition hover:bg-[#f7f1ee] hover:text-[#b63825]"
           >
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M19 12H5M12 19l-7-7 7-7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-            </svg>
-          </button>
+            <ArrowLeft size={19} />
+            <span className="hidden sm:inline">Restaurants</span>
+          </Link>
 
-          <Link href="/" className="flex items-center mr-4 lg:mr-8 cursor-pointer">
-            <span
-              className="text-[20px] sm:text-[24px] lg:text-[32px] font-extrabold select-none"
-              style={{ fontFamily: "Abril Fatface, serif" }}
-            >
+          <Link href="/" className="flex items-center justify-self-center">
+            <span className="select-none text-[22px] font-black tracking-[-0.04em] sm:text-[26px]">
               <span className="text-[#CD3625]">FOOD</span>
               <span className="text-black">DELY</span>
             </span>
           </Link>
 
-          <div className="flex-1" />
-
-          <div className="flex items-center gap-3 mr-4 lg:mr-6">
-            {/* Cart */}
-            <Link href="/cart" className="relative flex items-center justify-center w-12 h-12 lg:w-14 lg:h-14 rounded-full bg-[#CD3625] cursor-pointer transition">
-              <Image
-                src="/images/cart-icon.svg"
-                alt="Cart"
-                width={20}
-                height={20}
-                className="lg:w-6 lg:h-6 brightness-0 invert"
-              />
+          <nav className="flex items-center justify-self-end gap-1 sm:gap-2">
+            <Link href="/cart" aria-label="Cart" className="relative flex h-10 w-10 items-center justify-center rounded-xl text-[#514944] transition hover:bg-[#f7f1ee] hover:text-[#b63825]">
+              <ShoppingBag size={20} />
               {apiCart?.items && apiCart.items.length > 0 && (
-                <div className="absolute -top-1 -right-1 bg-white text-[#CD3625] text-xs font-bold w-5 h-5 flex items-center justify-center rounded-full border-2 border-[#CD3625]">
+                <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full border-2 border-white bg-[#CD3625] px-1 text-[10px] font-black text-white">
                   {apiCart.items.reduce((sum, item) => sum + item.quantity, 0)}
-                </div>
+                </span>
               )}
             </Link>
-            {/* Notification Bell */}
-            <div className="relative">
-              <button className="flex items-center justify-center w-12 h-12 lg:w-14 lg:h-14 rounded-full bg-[#F7F8FD] cursor-pointer">
-                <Image
-                  src="/images/star-icon.svg"
-                  alt="Notifications"
-                  width={20}
-                  height={20}
-                  className="lg:w-6 lg:h-6"
-                />
-              </button>
-              <div className="absolute -top-1 -right-1 w-4 h-4 bg-[#CD3625] rounded-full border-2 border-white"></div>
-            </div>
-          </div>
-
-          <div className="hidden md:flex items-center gap-8">
             {!authLoading && (
-              <>
-                {!isAuthenticated ? (
-                  <>
-                    <Link
-                      href="/signin"
-                      className="text-yellow-600 text-[16px] lg:text-[18px] underline hover:text-yellow-700"
-                    >
-                      Sign In
-                    </Link>
-                    <Link
-                      href="/signup"
-                      className="bg-[#CD3625] text-white cursor-pointer px-6 lg:px-8 py-2.5 lg:py-3.5 rounded-full font-semibold hover:bg-[#b83213] transition text-sm lg:text-base">
-                      Sign Up
-                    </Link>
-                  </>
-                ) : (
-                  <div className="flex items-center gap-4">
-                    <Link
-                      href="/orders"
-                      className="text-black text-[16px] hover:text-gray-600 font-medium"
-                    >
-                      Orders
-                    </Link>
-                    <Link
-                      href="/profile"
-                      className="text-black text-[16px] hover:text-gray-600 font-medium"
-                    >
-                      {user?.firstname || "Profile"}
-                    </Link>
-                    <button
-                      onClick={() => {
-                        logout();
-                        window.location.href = "/";
-                      }}
-                      className="bg-gray-200 text-black px-4 py-2 rounded-full font-medium hover:bg-gray-300 transition text-sm"
-                    >
-                      Logout
-                    </button>
-                  </div>
-                )}
-              </>
-            )}
-          </div>
+              isAuthenticated ? (
+                <>
+                  <Link href="/profile" className="flex h-10 items-center gap-2 rounded-xl px-2 text-sm font-bold transition hover:bg-[#f7f1ee] sm:px-3">
+                    <UserRound size={18} />
+                    <span className="hidden sm:inline">{user?.firstname || "Profile"}</span>
+                  </Link>
+                  <button
+                    type="button"
+                    aria-label="Sign out"
+                    onClick={() => {
+                      logout();
+                      window.location.href = "/";
+                    }}
+                    className="flex h-10 w-10 items-center justify-center rounded-xl text-[#766b65] transition hover:bg-red-50 hover:text-red-700"
+                  >
+                    <LogOut size={18} />
+                  </button>
+                </>
+              ) : (
+                <Link href="/signin" className="rounded-xl bg-[#CD3625] px-4 py-2 text-sm font-bold text-white transition hover:bg-[#ad321f]">
+                  Sign in
+                </Link>
+              ))}
+          </nav>
         </div>
       </header>
 
       {/* Success Message Toast */}
       {addedMessage && (
-        <div className="fixed top-20 right-4 z-50 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg animate-pulse">
+        <div className="fixed right-4 top-20 z-50 rounded-xl border border-emerald-200 bg-emerald-600 px-5 py-3 text-sm font-bold text-white shadow-xl">
           {addedMessage}
         </div>
       )}
 
-      <div className="min-h-screen flex flex-col max-w-[1400px] mx-auto">
-        <main className="w-full mx-auto px-4 pb-8 pt-24 sm:pt-28 lg:pt-32 flex flex-col gap-4 sm:gap-6 lg:gap-8">
+      <div className="mx-auto flex min-h-screen max-w-[1400px] flex-col">
+        <main className="mx-auto flex w-full flex-col gap-5 px-4 pb-10 pt-24 sm:gap-6 sm:px-6 lg:gap-8 lg:px-8">
           {/* Restaurant Header - Matching Partners Page Style */}
-          <div className="bg-white rounded-2xl shadow-lg overflow-hidden">
-            <div className="relative h-[200px] sm:h-[250px] lg:h-[300px]">
-              <Image
+          <div className="restaurant-reveal grid overflow-hidden rounded-[24px] border border-[#e8ddd7] bg-white shadow-[0_18px_45px_rgba(50,31,24,0.1)] lg:grid-cols-[minmax(300px,38%)_1fr]">
+            <div className="group relative h-[180px] overflow-hidden sm:h-[210px] lg:h-[230px]">
+              <SafeImage
                 src={restaurant.image}
                 alt={restaurant.name}
                 fill
-                className="object-cover"
+                className="object-cover transition-transform duration-1000 group-hover:scale-105"
+                fallbackClassName="object-contain bg-[#fff8f5] p-8"
               />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
-              <div className="absolute bottom-4 left-4 right-4">
-                <h2 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-white">
+              <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/25 to-black/5" />
+              <div className="absolute left-3 top-3 flex gap-2 sm:left-4 sm:top-4">
+                <span className={`rounded-full px-3 py-1.5 text-xs font-bold backdrop-blur ${restaurant.open ? "bg-emerald-500/90 text-white" : "bg-black/60 text-white"}`}>
+                  {restaurant.open ? "Open now" : "Currently closed"}
+                </span>
+                {restaurant.no_waste && (
+                  <span className="rounded-full bg-white/90 px-3 py-1.5 text-xs font-bold text-emerald-700 backdrop-blur">
+                    No Waste
+                  </span>
+                )}
+              </div>
+              <div className="absolute inset-x-0 bottom-0 p-4">
+                <p className="mb-1 text-[10px] font-bold uppercase tracking-[0.17em] text-[#ff9b8f]">Restaurant menu</p>
+                <h1 className="text-2xl font-black tracking-[-0.04em] text-white sm:text-3xl">
                   {restaurant.name}
-                </h2>
+                </h1>
                 {restaurant.description && (
-                  <p className="text-white/80 mt-1">{restaurant.description}</p>
+                  <p className="mt-1.5 line-clamp-1 max-w-2xl text-xs leading-5 text-white/75">{restaurant.description}</p>
                 )}
               </div>
             </div>
-            <div className="p-4 sm:p-6 flex flex-wrap gap-4 sm:gap-8 items-center">
-              <div className="flex items-center gap-2 text-black font-semibold">
-                <Image src="/images/star-icon.svg" alt="Star" width={20} height={20} />
+            <div className="flex content-center flex-wrap items-center gap-2.5 p-4 sm:p-5 lg:p-6">
+              <div className="mb-1 w-full">
+                <p className="text-[11px] font-bold uppercase tracking-[0.15em] text-[#b63825]">At a glance</p>
+                <p className="mt-1 text-sm text-[#7d716a]">Everything you need before choosing your meal.</p>
+              </div>
+              <div className="flex items-center gap-2 rounded-xl bg-[#fff8e8] px-3 py-2 text-sm font-bold">
+                <Star size={18} className="fill-amber-400 text-amber-400" />
                 {restaurant.rating.toFixed(1)} <span className="font-normal text-gray-500">({restaurant.reviews} reviews)</span>
               </div>
-              <div className="w-px h-6 bg-gray-300 hidden sm:block" />
-              <div className="flex items-center gap-2 text-black font-semibold">
-                <Image src="/images/lock-icon.svg" alt="Min" width={18} height={18} />
+              <div className="flex items-center gap-2 rounded-xl bg-[#f8f4f1] px-3 py-2 text-sm font-bold">
+                <ShoppingBag size={17} className="text-[#b63825]" />
                 Min. {restaurant.min_amount.toFixed(2)} CHF
               </div>
-              <div className="w-px h-6 bg-gray-300 hidden sm:block" />
-              <div className="flex items-center gap-2 text-black font-semibold">
-                <Image src="/images/clock-icon.svg" alt="Status" width={18} height={18} />
-                <span className={restaurant.open ? "text-green-600" : "text-red-600"}>
-                  {restaurant.open ? "Open" : "Closed"}
-                </span>
+              <div className="flex items-center gap-2 rounded-xl bg-[#f8f4f1] px-3 py-2 text-sm font-bold">
+                <Clock3 size={17} className="text-[#b63825]" />
+                {restaurant.open ? "Accepting orders" : "Closed"}
               </div>
               {restaurant.delivery_fee > 0 && (
-                <>
-                  <div className="w-px h-6 bg-gray-300 hidden sm:block" />
-                  <div className="text-gray-600">
-                    Delivery: {restaurant.delivery_fee.toFixed(2)} CHF
-                  </div>
-                </>
-              )}
-              {restaurant.no_waste && (
-                <span className="bg-emerald-100 text-emerald-700 px-3 py-1 rounded-full text-sm font-semibold">
-                  No Waste
-                </span>
+                <div className="flex items-center gap-2 rounded-xl bg-[#f8f4f1] px-3 py-2 text-sm font-semibold text-[#615750]">
+                  <MapPin size={17} />
+                  {restaurant.delivery_fee.toFixed(2)} CHF delivery
+                </div>
               )}
             </div>
           </div>
 
           {/* Sticky Menu Category Bar */}
           {(foodCategories.length > 0 || (apiRestaurant?.nowaste_items && apiRestaurant.nowaste_items.length > 0)) && (
-            <div 
-              ref={menuBarRef}
-              className={`${isMenuBarSticky ? 'fixed top-0 left-0 right-0 z-50 bg-white shadow-lg border-b border-gray-200' : ''} mb-6`}
+            <div
+              className="sticky top-[72px] z-40 -mx-1 mb-6 rounded-2xl bg-[#fbfaf8]/95 px-1 py-2 backdrop-blur-xl"
             >
-              <div className={`${isMenuBarSticky ? 'max-w-[1400px] mx-auto px-4' : ''}`}>
-                <div className="flex items-center justify-between overflow-x-auto pb-2 gap-2 scrollbar-hide">
+              <div>
+                <div className="scrollbar-hide flex items-stretch gap-2 overflow-x-auto rounded-2xl border border-[#e9dfda] bg-white p-2 shadow-[0_10px_30px_rgba(55,35,27,0.05)]">
                   {/* No Waste Category - Featured */}
                   {apiRestaurant?.nowaste_items && apiRestaurant.nowaste_items.length > 0 && (
                     <button
                       onClick={() => setSelectedFoodCategoryId("nowaste")}
-                      className={`px-6 py-3 rounded-full cursor-pointer font-medium text-base whitespace-nowrap transition-all duration-200 ${
+                      className={`flex min-h-12 items-center gap-2 whitespace-nowrap rounded-xl px-4 text-sm font-bold transition-all duration-300 ${
                         selectedFoodCategoryId === "nowaste"
-                          ? 'bg-emerald-500 text-white shadow-lg'
-                          : 'bg-white text-black border border-gray-200 hover:bg-gray-50'
+                          ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-600/20'
+                          : 'bg-[#f7fbf8] text-emerald-800 hover:bg-emerald-50'
                       }`}
                     >
-                      ♻ No Waste
+                      <span>♻ No Waste</span>
+                      <span className={`rounded-full px-2 py-0.5 text-[11px] ${selectedFoodCategoryId === "nowaste" ? "bg-white/20" : "bg-emerald-100"}`}>
+                        {apiRestaurant.nowaste_items.length}
+                      </span>
                     </button>
                   )}
                   {foodCategories.map((foodCategory) => (
                     <button
                       key={foodCategory.id}
                       onClick={() => setSelectedFoodCategoryId(foodCategory.id)}
-                      className={`px-6 py-3 rounded-full cursor-pointer font-medium text-base whitespace-nowrap transition-all duration-200 ${
+                      className={`flex min-h-12 items-center gap-2 whitespace-nowrap rounded-xl px-4 text-sm font-bold transition-all duration-300 ${
                         selectedFoodCategoryId === foodCategory.id
-                          ? 'bg-[#CD3625] text-white shadow-lg'
-                          : 'bg-white text-black border border-gray-200 hover:bg-gray-50'
+                          ? 'bg-[#CD3625] text-white shadow-lg shadow-[#CD3625]/20'
+                          : 'bg-[#fbf8f6] text-[#615650] hover:bg-[#fff0eb] hover:text-[#b73825]'
                       }`}
                     >
-                      {foodCategory.name}
+                      <span>{foodCategory.name}</span>
+                      <span className={`rounded-full px-2 py-0.5 text-[11px] ${selectedFoodCategoryId === foodCategory.id ? "bg-white/20" : "bg-[#eee5e0]"}`}>
+                        {foodCategory.menu_items?.length || 0}
+                      </span>
                     </button>
                   ))}
                 </div>
@@ -531,65 +487,62 @@ export default function PartnerDetailPage({ params }: { params: Promise<{ id: st
             </div>
           )}
 
-          <div className="flex flex-col lg:flex-row gap-8">
+          <div className="flex flex-col gap-7 lg:flex-row lg:items-start">
             <div className="flex-1 min-w-0">
               {/* Menu Items */}
               <div className="mb-8">
-                <h2 className="md:text-[28px] text-[20px] text-black font-medium mb-4">
-                  {selectedFoodCategoryId === "nowaste"
-                    ? "♻ No Waste - Featured"
-                    : currentFoodCategory?.name || "Menu"}
-                </h2>
+                <div className="mb-5">
+                  <p className="text-[11px] font-bold uppercase tracking-[0.17em] text-[#b63825]">
+                    Freshly prepared
+                  </p>
+                  <h2 className="mt-1 text-2xl font-black tracking-[-0.03em] sm:text-3xl">
+                    {selectedFoodCategoryId === "nowaste"
+                      ? "No Waste selections"
+                      : currentFoodCategory?.name || "Menu"}
+                  </h2>
+                  {currentFoodCategory?.description && (
+                    <p className="mt-2 max-w-2xl text-sm leading-6 text-[#7d716a]">
+                      {currentFoodCategory.description}
+                    </p>
+                  )}
+                </div>
 
                 {/* No Waste Items */}
                 {selectedFoodCategoryId === "nowaste" && apiRestaurant?.nowaste_items && apiRestaurant.nowaste_items.length > 0 && (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6 mb-6">
+                  <div className="mb-6 grid grid-cols-1 items-start gap-4">
                     {apiRestaurant.nowaste_items.map((item) => (
                       <div
                         key={item.id}
-                        className="relative flex bg-white rounded-xl shadow-lg w-full md:w-[420px] h-auto md:h-full min-h-[180px] md:min-h-[230px] items-center overflow-hidden border-2 border-emerald-200"
+                        className="group relative grid w-full overflow-hidden rounded-[22px] border border-emerald-200 bg-white shadow-[0_12px_30px_rgba(22,101,70,0.08)] transition duration-300 hover:-translate-y-1 hover:shadow-lg sm:grid-cols-[150px_1fr]"
                       >
-                        <div className="w-[120px] md:w-[190px] h-[120px] md:h-[190px] rounded-xl overflow-hidden flex-shrink-0 relative ml-4 md:ml-6 mt-3">
-                          {item.image ? (
-                            <Image
-                              src={item.image}
-                              alt={item.name}
-                              fill
-                              className="object-cover"
-                            />
-                          ) : (
-                            <div className="w-full h-full bg-gray-200 flex items-center justify-center">
-                              <span className="text-gray-400 text-xs">No Image</span>
-                            </div>
-                          )}
+                        <div className="relative h-[170px] overflow-hidden sm:h-full sm:min-h-[180px]">
+                          <SafeImage
+                            src={item.image}
+                            alt={item.name}
+                            fill
+                            className="object-cover"
+                            fallbackClassName="object-contain bg-[#fff8f5] p-6"
+                          />
                         </div>
-                        <div className="flex flex-col pl-4 md:pl-6 pr-4 py-10 flex-1 h-full">
-                          <div className="flex items-center gap-2 mb-1">
-                            <span className="text-[20px] md:text-[24px] font-bold text-[#373A3C]">
-                              {item.price.toFixed(2)} CHF
-                            </span>
+                        <div className="min-w-0 p-5 pr-20">
+                          <div className="flex flex-wrap items-start justify-between gap-3">
+                            <h3 className="text-xl font-black tracking-tight">{item.name}</h3>
+                            <span className="text-lg font-black text-[#b63825]">{item.price.toFixed(2)} CHF</span>
                           </div>
-                          <div className="text-[14px] md:text-[16px] font-bold text-[#373A3C] mb-1 leading-tight">
-                            {item.name}
-                          </div>
-                          <div className="text-base text-[#8F8F8F] text-[10px] leading-snug mt-1">
-                            {item.description}
-                          </div>
+                          {item.description && <p className="mt-2 text-sm leading-6 text-[#796e68]">{item.description}</p>}
                         </div>
                         <button
-                          className="absolute bottom-1 right-1 w-8 h-8 bg-[#CD3625] rounded-full cursor-pointer text-white text-3xl flex items-center justify-center disabled:opacity-50"
+                          className="absolute bottom-4 right-4 flex min-h-10 items-center justify-center gap-2 rounded-xl bg-[#CD3625] px-4 text-sm font-bold text-white shadow-md transition hover:-translate-y-0.5 hover:bg-[#ad321f] hover:shadow-lg disabled:opacity-50"
                           onClick={() => handleAddNoWasteItem(item.id, item.name)}
                           disabled={addingItemId === item.id}
                         >
                           {addingItemId === item.id ? (
                             <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
                           ) : (
-                            <Image
-                              src="/images/plus-icon.svg"
-                              alt="Add to cart"
-                              width={20}
-                              height={20}
-                            />
+                            <>
+                              <Plus size={16} />
+                              Add
+                            </>
                           )}
                         </button>
                       </div>
@@ -599,50 +552,40 @@ export default function PartnerDetailPage({ params }: { params: Promise<{ id: st
 
                 {/* Regular Menu Items by Category */}
                 {currentFoodCategory && currentFoodCategory.menu_items && currentFoodCategory.menu_items.length > 0 && (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
+                  <div className="grid grid-cols-1 items-start gap-4">
                     {currentFoodCategory.menu_items.map((item) => (
                       <div
                         key={item.id}
-                        className="relative flex bg-white rounded-xl shadow-lg w-full md:w-[420px] h-auto md:h-full min-h-[180px] md:min-h-[230px] items-center overflow-hidden"
+                        className="group relative grid w-full overflow-hidden rounded-[22px] border border-[#e9dfda] bg-white shadow-[0_12px_30px_rgba(55,35,27,0.06)] transition duration-300 hover:-translate-y-1 hover:border-[#e5b5a9] hover:shadow-[0_20px_45px_rgba(55,35,27,0.11)] sm:grid-cols-[150px_1fr]"
                       >
-                        <div className="w-[120px] md:w-[190px] h-[120px] md:h-[190px] rounded-xl overflow-hidden flex-shrink-0 relative ml-4 md:ml-6 mt-3">
-                          {item.image ? (
-                            <Image
-                              src={item.image}
-                              alt={item.name}
-                              fill
-                              className="object-cover"
-                            />
-                          ) : (
-                            <div className="w-full h-full bg-gray-200 flex items-center justify-center">
-                              <span className="text-gray-400 text-xs">No Image</span>
-                            </div>
-                          )}
+                        <div className="relative h-[170px] overflow-hidden sm:h-full sm:min-h-[210px]">
+                          <SafeImage
+                            src={item.image}
+                            alt={item.name}
+                            fill
+                            className="object-cover"
+                            fallbackClassName="object-contain bg-[#fff8f5] p-6"
+                          />
                         </div>
-                        <div className="flex flex-col pl-4 md:pl-6 pr-4 py-10 flex-1 h-full">
-                          <div className="flex items-center gap-2 mb-1">
-                            <span className="text-[20px] md:text-[24px] font-bold text-[#373A3C]">
-                              {item.price.toFixed(2)} CHF
-                            </span>
+                        <div className="min-w-0 p-5">
+                          <div className="flex flex-wrap items-start justify-between gap-3">
+                            <h3 className="text-xl font-black tracking-tight">{item.name}</h3>
+                            <span className="text-lg font-black text-[#b63825]">{item.price.toFixed(2)} CHF</span>
                           </div>
-                          <div className="text-[14px] md:text-[16px] font-bold text-[#373A3C] mb-1 leading-tight">
-                            {item.name}
-                          </div>
-                          <div className="text-base text-[#8F8F8F] text-[10px] leading-snug mt-1">
-                            {item.description}
-                          </div>
+                          {item.description && <p className="mt-2 text-sm leading-6 text-[#796e68]">{item.description}</p>}
 
                           {/* Menu Item Options */}
                           {item.options && item.options.length > 0 && (
-                            <div className="mt-3 space-y-2">
-                              {item.options.map((option) => (
-                                <div key={option.id} className="space-y-1">
-                                  <label className="text-xs font-medium text-gray-700">
-                                    {option.name} {option.required && <span className="text-red-500">*</span>}
-                                  </label>
+                            <div className="mt-5 space-y-4 border-t border-[#eee5e0] pt-4">
+                              {item.options.filter((option) => option.items.length > 0).map((option) => (
+                                <fieldset key={option.id}>
+                                  <legend className="mb-2 flex w-full items-center justify-between text-sm font-bold text-[#4d4540]">
+                                    <span>{option.name}</span>
+                                    <span className="text-[11px] font-semibold text-[#94877f]">{option.required ? "Required" : "Optional"}{option.multiple ? " · Multiple" : ""}</span>
+                                  </legend>
                                   {option.multiple ? (
                                     // Multi-select: Use checkboxes
-                                    <div className="flex flex-wrap gap-2">
+                                    <div className="grid gap-2 sm:grid-cols-2">
                                       {option.items.map((optionItem) => {
                                         const selectedValue = selectedOptions[item.id]?.[option.id];
                                         const isSelected = Array.isArray(selectedValue)
@@ -651,7 +594,7 @@ export default function PartnerDetailPage({ params }: { params: Promise<{ id: st
                                         return (
                                           <label
                                             key={optionItem.id}
-                                            className="flex items-center gap-1 cursor-pointer bg-gray-50 px-2 py-1 rounded border border-gray-200 hover:bg-gray-100"
+                                            className={`flex min-h-11 cursor-pointer items-center gap-2 rounded-xl border px-3 text-sm font-semibold transition ${isSelected ? "border-[#CD3625] bg-[#fff0eb] text-[#a83221]" : "border-[#ded4cf] bg-white text-[#5f5550] hover:border-[#d5a99f]"}`}
                                           >
                                             <input
                                               type="checkbox"
@@ -669,7 +612,7 @@ export default function PartnerDetailPage({ params }: { params: Promise<{ id: st
                                   ) : (
                                     // Single-select: Use dropdown
                                     <select
-                                      className="w-full text-xs border border-gray-300 rounded-lg px-3 py-2 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#CD3625] focus:border-transparent transition-all appearance-none cursor-pointer hover:border-[#CD3625]"
+                                      className="min-h-12 w-full cursor-pointer appearance-none rounded-xl border border-[#d9cec8] bg-white px-4 pr-10 text-sm font-semibold text-[#514843] outline-none transition hover:border-[#c9aaa1] focus:border-[#CD3625] focus:ring-4 focus:ring-[#CD3625]/10"
                                       style={{
                                         backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23333' d='M6 9L1 4h10z'/%3E%3C/svg%3E")`,
                                         backgroundRepeat: 'no-repeat',
@@ -707,16 +650,16 @@ export default function PartnerDetailPage({ params }: { params: Promise<{ id: st
                                       ))}
                                     </select>
                                   )}
-                                </div>
+                                </fieldset>
                               ))}
                             </div>
                           )}
 
                           {/* Allergy Information */}
                           {item.allergies && item.allergies.length > 0 && (
-                            <div className="mt-2">
-                              <div className="text-xs text-gray-600 mb-1">Allergies:</div>
-                              <div className="flex flex-wrap gap-1">
+                            <div className="mt-4 border-t border-[#eee5e0] pt-3">
+                              <div className="mb-2 text-[11px] font-bold uppercase tracking-wide text-[#8b7e77]">Contains allergens</div>
+                              <div className="flex flex-wrap gap-1.5">
                                 {item.allergies.map((allergy, allergyIndex) => {
                                   const allergyName = typeof allergy === "string" 
                                     ? allergy 
@@ -724,7 +667,7 @@ export default function PartnerDetailPage({ params }: { params: Promise<{ id: st
                                       ? allergy.name 
                                       : `Allergy ${allergyIndex + 1}`;
                                   return (
-                                    <span key={allergyIndex} className="text-xs bg-red-100 text-red-700 px-2 py-1 rounded">
+                                    <span key={allergyIndex} className="rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-800">
                                       {allergyName}
                                     </span>
                                   );
@@ -734,19 +677,17 @@ export default function PartnerDetailPage({ params }: { params: Promise<{ id: st
                           )}
                         </div>
                         <button
-                          className="absolute bottom-1 right-1 w-8 h-8 bg-[#CD3625] rounded-full cursor-pointer text-white text-3xl flex items-center justify-center disabled:opacity-50"
+                          className="mx-5 mb-5 flex min-h-12 items-center justify-center gap-2 rounded-xl bg-[#CD3625] px-5 text-sm font-bold text-white shadow-md transition hover:-translate-y-0.5 hover:bg-[#ad321f] hover:shadow-lg disabled:opacity-50 sm:col-start-2 sm:mt-0"
                           onClick={() => handleAddMenuItem(item)}
                           disabled={addingItemId === item.id}
                         >
                           {addingItemId === item.id ? (
                             <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
                           ) : (
-                            <Image
-                              src="/images/plus-icon.svg"
-                              alt="Add to cart"
-                              width={20}
-                              height={20}
-                            />
+                            <>
+                              <Plus size={17} />
+                              Add to cart · {item.price.toFixed(2)} CHF
+                            </>
                           )}
                         </button>
                       </div>
@@ -757,8 +698,10 @@ export default function PartnerDetailPage({ params }: { params: Promise<{ id: st
                 {/* Empty State */}
                 {(!currentFoodCategory || !currentFoodCategory.menu_items || currentFoodCategory.menu_items.length === 0) &&
                  (selectedFoodCategoryId !== "nowaste" || !apiRestaurant?.nowaste_items || apiRestaurant.nowaste_items.length === 0) && (
-                  <div className="text-center py-8">
-                    <p className="text-gray-500">No items available in this category.</p>
+                  <div className="rounded-[22px] border border-dashed border-[#d9cac3] bg-white px-6 py-12 text-center">
+                    <ShoppingBag className="mx-auto text-[#c8b6ae]" size={30} />
+                    <p className="mt-3 font-bold text-[#5e544f]">No items in this category yet</p>
+                    <p className="mt-1 text-sm text-[#8a7e77]">Choose another menu category to continue.</p>
                   </div>
                 )}
 
@@ -782,55 +725,66 @@ export default function PartnerDetailPage({ params }: { params: Promise<{ id: st
             </div>
 
             {/* Right: Cart */}
-            <div className="w-full lg:w-[320px] flex-shrink-0">
-              <div className="bg-white rounded-2xl shadow p-6 mb-6">
+            <aside className="w-full flex-shrink-0 lg:sticky lg:top-24 lg:w-[330px]">
+              <div className="mb-6 overflow-hidden rounded-[24px] border border-[#e5d9d3] bg-white shadow-[0_18px_48px_rgba(55,35,27,0.1)]">
                 {/* Cart Title */}
-                <div className="text-[16px] text-[#444] font-normal mb-1">
-                  Your Cart From
+                <div className="border-b border-[#eee5e0] bg-[#fff9f6] p-5">
+                  <div className="flex items-center gap-3">
+                    <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#CD3625] text-white shadow-md shadow-[#CD3625]/20">
+                      <ShoppingBag size={19} />
+                    </span>
+                    <div className="min-w-0">
+                      <div className="text-[10px] font-bold uppercase tracking-[0.17em] text-[#b63825]">
+                        Your cart
+                      </div>
+                      <div className="mt-0.5 truncate text-lg font-black leading-tight text-[#241f1c]">
+                        {restaurant.name}
+                      </div>
+                    </div>
+                    {cartItems.length > 0 && (
+                      <span className="ml-auto flex h-7 min-w-7 items-center justify-center rounded-full bg-[#f2e7e2] px-2 text-xs font-black text-[#8e3528]">
+                        {cartItems.reduce((sum, item) => sum + item.quantity, 0)}
+                      </span>
+                    )}
+                  </div>
                 </div>
-                <div className="md:text-[28px] text-[20px] font-medium text-[#222] mb-6 leading-tight">
-                  {restaurant.name}
-                </div>
+
+                <div className="p-5">
                 {/* Cart Items */}
                 {isCartLoading ? (
                   <div className="flex items-center justify-center py-8">
                     <div className="w-6 h-6 border-2 border-[#CD3625] border-t-transparent rounded-full animate-spin"></div>
                   </div>
                 ) : cartItems.length > 0 ? (
-                  <div className="flex flex-col gap-6 mb-8">
+                  <div className="mb-5 flex flex-col gap-2.5">
                     {cartItems.map((cartItem) => {
                       const item = cartItem.menu_item || cartItem.nowaste_item;
                       if (!item) return null;
                       
                       return (
-                        <div key={cartItem.id} className="flex items-center gap-4">
-                          <div className="w-[80px] md:w-[100px] h-[60px] md:h-[70px] rounded-xl overflow-hidden relative flex-shrink-0">
-                            {item.image ? (
-                              <Image
-                                src={item.image}
-                                alt={item.name}
-                                fill
-                                className="object-cover"
-                              />
-                            ) : (
-                              <div className="w-full h-full bg-gray-200 flex items-center justify-center">
-                                <span className="text-gray-400 text-xs">No Image</span>
-                              </div>
-                            )}
+                        <div key={cartItem.id} className="group flex items-center gap-3 rounded-xl border border-[#eee5e0] bg-[#fffdfa] p-2.5 transition hover:border-[#e3b9ae] hover:bg-[#fff8f5]">
+                          <div className="relative h-14 w-14 flex-shrink-0 overflow-hidden rounded-xl">
+                            <SafeImage
+                              src={item.image}
+                              alt={item.name}
+                              fill
+                              className="object-cover"
+                              fallbackClassName="object-contain bg-[#fff8f5] p-5"
+                            />
                           </div>
                           <div className="flex-1 min-w-0 flex flex-col justify-center">
                             <div className="flex items-center justify-between w-full">
-                              <div className="text-[16px] md:text-[18px] font-normal text-[#222] truncate">
+                              <div className="truncate text-sm font-bold text-[#2d2724]">
                                 {item.name}
                               </div>
-                              <div className="text-[14px] md:text-[16px] font-normal text-[#222] ml-4 whitespace-nowrap">
+                              <div className="ml-3 whitespace-nowrap text-xs font-black text-[#b63825]">
                                 {item.price.toFixed(2)} CHF
                               </div>
                             </div>
                             <div className="flex items-center justify-between gap-2 mt-2">
-                              <span className="text-gray-500 text-sm">Qty: {cartItem.quantity}</span>
+                              <span className="text-xs font-semibold text-[#8b7e77]">Quantity {cartItem.quantity}</span>
                               <button
-                                className="ml-2 cursor-pointer"
+                                className="ml-2 rounded-lg p-1 opacity-60 transition hover:bg-red-50 hover:opacity-100"
                                 onClick={() => handleRemoveFromCart(cartItem.id)}
                               >
                                 <Image
@@ -847,48 +801,40 @@ export default function PartnerDetailPage({ params }: { params: Promise<{ id: st
                     })}
                   </div>
                 ) : (
-                  <div className="text-center py-8 text-gray-500">
-                    Your cart is empty
+                  <div className="rounded-2xl border border-dashed border-[#dacbc4] bg-[#fbf8f6] px-4 py-9 text-center">
+                    <ShoppingBag className="mx-auto text-[#c9b6ad]" size={27} />
+                    <p className="mt-3 text-sm font-bold text-[#5e544f]">Your cart is empty</p>
+                    <p className="mt-1 text-xs leading-5 text-[#93867f]">Add an item from the menu to begin.</p>
                   </div>
                 )}
                 {/* Cart Summary */}
                 {cartItems.length > 0 && (
-                  <div className="border-t border-gray-200 pt-12 mt-2 flex flex-col gap-1.5 text-[15px] md:text-[17px] text-[#222]">
-                    <div className="flex justify-between">
-                      <span>Sub total</span>
-                      <span>{subtotal.toFixed(2)} CHF</span>
+                  <div className="mt-2 border-t border-[#eee5e0] pt-5">
+                    <div className="flex items-center justify-between text-lg font-black text-[#241f1c]">
+                      <span>Cart total</span>
+                      <span className="text-[#b63825]">{subtotal.toFixed(2)} CHF</span>
                     </div>
-                    <div className="flex justify-between">
-                      <span>Delivery fee</span>
-                      <span>{deliveryFee.toFixed(2)} CHF</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>Taxes</span>
-                      <span>{taxes.toFixed(2)} CHF</span>
-                    </div>
-                    <div className="border-t border-gray-200 my-2" />
-                    <div className="flex justify-between items-center font-medium text-[20px] md:text-[24px] mt-2">
-                      <span>Total</span>
-                      <span className="font-semibold">{total.toFixed(2)} CHF</span>
-                    </div>
+                    <p className="mt-2 text-xs leading-5 text-[#8b7e77]">Final delivery charges and discounts are confirmed at checkout.</p>
                   </div>
                 )}
                 {/* Checkout Button */}
                 <button
                   onClick={handleCheckout}
                   disabled={cartItems.length === 0}
-                  className="mt-8 w-full bg-[#CD3625] hover:bg-red-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-3 px-2 rounded-full text-[18px] md:text-[20px] flex items-center justify-center gap-4 shadow-lg transition"
+                  className="mt-6 flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#CD3625] px-4 text-sm font-bold text-white shadow-lg transition hover:-translate-y-0.5 hover:bg-[#ad321f] disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   Order and checkout
-                  <Image
-                    src="/images/leftarrow.svg"
-                    alt="menu"
-                    width={28}
-                    height={28}
-                  />
+                  <ShoppingBag size={18} />
                 </button>
+                <Link
+                  href="/cart"
+                  className="mt-3 flex min-h-10 w-full items-center justify-center rounded-xl text-sm font-bold text-[#796d67] transition hover:bg-[#f8f2ef] hover:text-[#b63825]"
+                >
+                  Review full cart
+                </Link>
+                </div>
               </div>
-            </div>
+            </aside>
           </div>
         </main>
       </div>

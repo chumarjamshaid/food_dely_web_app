@@ -1,104 +1,35 @@
 "use client";
+
+import { useRequestPasswordReset } from "@/lib/api";
+import { extractAuthError } from "@/lib/api/error";
+import { ArrowLeft, CheckCircle2, LoaderCircle, Mail, Sparkles } from "lucide-react";
 import Link from "next/link";
-import { useState } from "react";
-import "@fontsource/abril-fatface";
+import { FormEvent, useState } from "react";
+
 export default function ForgotPassword() {
   const [email, setEmail] = useState("");
-  const [isSubmitted, setIsSubmitted] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
+  const [sent, setSent] = useState(false);
+  const [error, setError] = useState("");
+  const reset = useRequestPasswordReset();
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsLoading(true);
-    
-    // TODO: Implement actual password reset functionality
-    // For now, simulate API call
-    setTimeout(() => {
-      setIsLoading(false);
-      setIsSubmitted(true);
-    }, 2000);
+  const submit = (event: FormEvent) => {
+    event.preventDefault(); setError("");
+    reset.mutate(email, { onSuccess: () => setSent(true), onError: (e) => setError(extractAuthError(e, "We could not send the reset email. Please try again.")) });
   };
 
-  return (
-    <div className="min-h-screen bg-black flex items-center justify-center px-4">
-      <div className="w-full max-w-md">
-        {/* Header */}
-        <div className="text-center mb-8">
-          <div
-            className="text-[32px] font-extrabold mb-2"
-            style={{ fontFamily: "Abril Fatface, serif" }}
-          >
-            <span className="text-red-600">FOOD</span>
-            <span className="text-white">DELY</span>
-          </div>
-          <h1 className="text-2xl font-bold text-white mb-2">Reset Password</h1>
-          <p className="text-gray-300">
-            {isSubmitted 
-              ? "Check your email for reset instructions" 
-              : "Enter your email to receive reset instructions"
-            }
-          </p>
-        </div>
-
-        {/* Reset Password Form */}
-        <div className="bg-black bg-opacity-40 backdrop-blur-sm rounded-2xl p-8 border border-gray-600">
-          {!isSubmitted ? (
-            <form onSubmit={handleSubmit} className="space-y-6">
-              <div>
-                <label htmlFor="email" className="block text-sm font-medium text-gray-300 mb-2">
-                  Email Address
-                </label>
-                <input
-                  type="email"
-                  id="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  required
-                  className="w-full px-4 py-3 rounded-full bg-black bg-opacity-40 text-white placeholder-gray-400 border border-gray-600 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
-                  placeholder="Enter your email"
-                />
-              </div>
-
-              <button
-                type="submit"
-                disabled={isLoading}
-                className="w-full bg-[#CD3625] text-white py-3 rounded-full font-semibold hover:bg-red-600 transition disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {isLoading ? "Sending..." : "Send Reset Link"}
-              </button>
-            </form>
-          ) : (
-            <div className="text-center space-y-6">
-              <div className="w-16 h-16 mx-auto bg-green-500 rounded-full flex items-center justify-center">
-                <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                </svg>
-              </div>
-              <div>
-                <h3 className="text-lg font-semibold text-white mb-2">Email Sent!</h3>
-                <p className="text-gray-300 text-sm">
-                  We&apos;ve sent password reset instructions to <span className="text-white">{email}</span>
-                </p>
-              </div>
-              <button
-                onClick={() => setIsSubmitted(false)}
-                className="w-full bg-gray-600 text-white py-3 rounded-full font-semibold hover:bg-gray-700 transition"
-              >
-                Send to Different Email
-              </button>
-            </div>
-          )}
-
-          <div className="mt-6 text-center">
-            <p className="text-gray-300">
-              Remember your password?{" "}
-              <Link href="/signin" className="text-red-400 hover:text-red-300 font-medium">
-                Sign in
-              </Link>
-            </p>
-          </div>
-        </div>
-      </div>
+  return <main className="relative min-h-screen overflow-hidden bg-[#fbfaf8] px-5 py-10 text-[#251f1c]">
+    <div className="pointer-events-none absolute -left-24 top-16 h-72 w-72 animate-pulse rounded-full bg-[#f6b8a8]/25 blur-3xl" />
+    <div className="pointer-events-none absolute right-[12%] top-[18%] grid grid-cols-4 gap-5 opacity-30">{Array.from({length:16}).map((_,i)=><i key={i} className="h-1.5 w-1.5 animate-bounce rounded-full bg-[#c83f28]" style={{animationDelay:`${i*80}ms`}} />)}</div>
+    <div className="relative mx-auto flex min-h-[80vh] max-w-md items-center">
+      <section className="w-full rounded-[30px] border border-[#eadfd9] bg-white/90 p-7 shadow-[0_30px_90px_rgba(66,39,29,.12)] backdrop-blur-xl sm:p-9">
+        <Link href="/signin" className="mb-8 inline-flex items-center gap-2 text-sm font-bold text-[#746862] hover:text-[#b63825]"><ArrowLeft size={17}/>Back to sign in</Link>
+        <div className="mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-[#fff0eb] text-[#c83f28]">{sent?<CheckCircle2 size={27}/>:<Mail size={27}/>}</div>
+        <p className="flex items-center gap-2 text-xs font-black uppercase tracking-[.16em] text-[#b63825]"><Sparkles size={14}/>Account recovery</p>
+        <h1 className="mt-2 text-3xl font-black tracking-[-.04em]">{sent?"Check your inbox":"Reset your password"}</h1>
+        <p className="mt-3 text-sm leading-6 text-[#756a65]">{sent?<>If an account exists for <strong>{email}</strong>, we sent secure reset instructions.</>:"Enter the email used for your Fooddely account."}</p>
+        {error&&<p role="alert" className="mt-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}
+        {!sent?<form onSubmit={submit} className="mt-7 space-y-5"><label className="block text-sm font-bold">Email address<input type="email" autoComplete="email" required value={email} onChange={e=>setEmail(e.target.value)} placeholder="you@example.com" className="mt-2 h-13 w-full rounded-xl border border-[#ded4cf] bg-white px-4 outline-none transition focus:border-[#c83f28] focus:ring-4 focus:ring-[#c83f28]/10"/></label><button disabled={reset.isPending} className="flex h-13 w-full items-center justify-center gap-2 rounded-xl bg-[#c83f28] font-bold text-white transition hover:-translate-y-0.5 hover:bg-[#ad321f] disabled:opacity-60">{reset.isPending&&<LoaderCircle size={18} className="animate-spin"/>}{reset.isPending?"Sending…":"Send reset link"}</button></form>:<button onClick={()=>setSent(false)} className="mt-7 h-13 w-full rounded-xl border border-[#ded4cf] font-bold transition hover:bg-[#faf6f3]">Use another email</button>}
+      </section>
     </div>
-  );
-} 
+  </main>;
+}

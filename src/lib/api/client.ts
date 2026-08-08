@@ -42,14 +42,21 @@ apiClient.interceptors.request.use(
 // Response interceptor - handle common errors
 apiClient.interceptors.response.use(
   (response) => response,
-  (error: AxiosError) => {
-    if (error.response?.status === 401) {
-      // Handle unauthorized - could redirect to login or clear token
-      if (typeof window !== 'undefined') {
-        localStorage.removeItem('auth_token');
-        // Optionally redirect to login
-        // window.location.href = '/signin';
+  async (error: AxiosError) => {
+    const config = error.config as (InternalAxiosRequestConfig & { _retry?: boolean }) | undefined;
+    const refresh = typeof window !== 'undefined' ? localStorage.getItem('refresh_token') : null;
+    if (error.response?.status === 401 && config && !config._retry && refresh && !config.url?.includes('/api/token/refresh/')) {
+      config._retry = true;
+      try {
+        const { data } = await axios.post<{ access: string }>(`${API_BASE_URL}/api/token/refresh/`, { refresh });
+        localStorage.setItem('auth_token', data.access);
+        config.headers.Authorization = `Bearer ${data.access}`;
+        return apiClient(config);
+      } catch {
+        clearAuthToken();
       }
+    } else if (error.response?.status === 401 && !refresh) {
+      clearAuthToken();
     }
 
     return Promise.reject(error);
@@ -60,8 +67,17 @@ apiClient.interceptors.response.use(
 export const setAuthToken = (token: string) => {
   if (typeof window !== 'undefined') {
     localStorage.setItem('auth_token', token);
-    // Clear anonymous session_id when user logs in (they'll use authenticated session)
-    clearSessionId();
+  }
+};
+
+export const setAuthTokens = (access: string, refresh?: string) => {
+  setAuthToken(access);
+  if (typeof window !== 'undefined' && refresh) localStorage.setItem('refresh_token', refresh);
+};
+
+export const setAuthRole = (role: "customer" | "restaurant_owner") => {
+  if (typeof window !== "undefined") {
+    localStorage.setItem("auth_role", role);
   }
 };
 
@@ -69,6 +85,8 @@ export const setAuthToken = (token: string) => {
 export const clearAuthToken = () => {
   if (typeof window !== 'undefined') {
     localStorage.removeItem('auth_token');
+    localStorage.removeItem('refresh_token');
+    localStorage.removeItem('auth_role');
     // Also clear session_id when logging out
     clearSessionId();
   }

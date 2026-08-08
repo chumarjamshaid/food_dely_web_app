@@ -24,10 +24,9 @@ async function fetchRestaurants(
   const response = await apiClient.get<RestaurantListItem[]>(
     "/api/app/restaurants/",
     {
-      params: {
-        search: params?.search || undefined,
-        category: params?.category || undefined,
-      },
+      params: Object.fromEntries(
+        Object.entries(params ?? {}).filter(([, value]) => value !== undefined && value !== ""),
+      ),
     },
   );
   return response.data;

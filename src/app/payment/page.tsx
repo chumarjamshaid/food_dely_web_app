@@ -6,15 +6,25 @@ import {
   useClearCart,
   useConfirmPayment,
   useCreatePaymentIntent,
-  useLogout,
-  useRemoveFromCart,
   useValidateCart,
 } from "@/lib/api";
+import SafeImage from "@/components/SafeImage";
+import { getCartTotal } from "@/lib/cart-total";
+import { extractApiError } from "@/lib/api/error";
 import "@fontsource/abril-fatface";
 import "@fontsource/playfair-display/700.css";
 import { Elements, PaymentElement, useElements, useStripe } from "@stripe/react-stripe-js";
 import { loadStripe } from "@stripe/stripe-js";
-import Image from "next/image";
+import {
+  ArrowLeft,
+  CheckCircle2,
+  CreditCard,
+  LockKeyhole,
+  MapPin,
+  PackageCheck,
+  ShoppingBag,
+  Truck,
+} from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
@@ -42,39 +52,8 @@ interface GuestInfo {
   deliveryNotes: string;
   preferredTime: string;
   receiveNotifications: boolean;
+  tipAmount: string;
 }
-
-interface UpsellItem {
-  id: string;
-  image: string;
-  name: string;
-  price: string;
-  description: string;
-}
-
-const upsellItems: UpsellItem[] = [
-  {
-    id: "upsell-1",
-    image: "/images/coke.png",
-    name: "Coca Cola",
-    price: "$2.99",
-    description: "Perfect with your pizza"
-  },
-  {
-    id: "upsell-2",
-    image: "/images/water.png",
-    name: "Sparkling Water",
-    price: "$1.99",
-    description: "Refreshing and healthy"
-  },
-  {
-    id: "upsell-3",
-    image: "/images/desert-1.png",
-    name: "Tiramisu",
-    price: "$4.99",
-    description: "Italian classic dessert"
-  }
-];
 
 // Payment form component that uses Stripe Elements
 function PaymentForm({
@@ -100,10 +79,11 @@ function PaymentForm({
     setIsProcessing(true);
 
     try {
-      // Step 1: Submit and confirm payment with Stripe
+      // Stripe's current Payment Element validates and commits its internal
+      // state before the PaymentIntent can be confirmed.
       const { error: submitError } = await elements.submit();
       if (submitError) {
-        onError(submitError.message || "Payment form validation failed");
+        onError(submitError.message || "Payment form validation failed.");
         setIsProcessing(false);
         return;
       }
@@ -113,21 +93,17 @@ function PaymentForm({
         elements,
         clientSecret,
         confirmParams: {
-          return_url: `${origin}/order-confirmation`,
+          return_url: `${origin}/payment/callback`,
         },
-        redirect: "always",
+        redirect: "if_required",
       });
 
-      // When redirect: "always", Stripe will redirect, so we may not reach here
-      // But if we do, handle the result
       if (result.error) {
         onError(result.error.message || "Payment confirmation failed");
         setIsProcessing(false);
         return;
       }
 
-      // Type guard: check if paymentIntent exists in result and is not null
-      // When redirect: "always", paymentIntent may not be available
       const paymentIntent = result && typeof result === "object" && "paymentIntent" in result
         ? (result as { paymentIntent: { status: string; id: string; last_payment_error?: unknown } }).paymentIntent
         : null;
@@ -155,8 +131,6 @@ function PaymentForm({
             }
           );
         } else if (paymentIntent.status === "requires_action") {
-          // Payment requires additional action (3D Secure, etc.)
-          // Stripe will handle the redirect automatically with redirect: "if_required"
           onError("Payment requires additional authentication. Please complete the verification.");
           setIsProcessing(false);
         } else {
@@ -164,11 +138,12 @@ function PaymentForm({
           setIsProcessing(false);
         }
       } else {
-        // When redirect: "always", Stripe redirects, so this shouldn't normally be reached
-        // But if it is, the redirect should handle the flow
+        onError("Stripe did not return a payment result. Please check the payment status before trying again.");
+        setIsProcessing(false);
       }
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : "An unexpected error occurred during payment.";
+      console.error("Stripe payment confirmation failed", error);
+      const errorMessage = extractApiError(error, "Stripe could not complete this payment. Please try again.");
       onError(errorMessage);
       setIsProcessing(false);
     }
@@ -180,7 +155,7 @@ function PaymentForm({
       <button
         onClick={handlePayment}
         disabled={!stripe || isProcessing || confirmPayment.isPending}
-        className="mt-6 w-full sm:w-[240px] bg-[#CD3625] hover:bg-red-600 text-white font-bold py-3 sm:py-2 rounded-full text-lg sm:text-[24px] flex items-center justify-center gap-2 shadow-lg transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed mx-auto"
+        className="mt-6 flex min-h-12 w-full cursor-pointer items-center justify-center gap-2 rounded-xl bg-[#c83b2b] px-5 text-base font-black text-white shadow-[0_12px_28px_rgba(200,59,43,0.22)] transition hover:-translate-y-0.5 hover:bg-[#ad321f] disabled:cursor-not-allowed disabled:opacity-50"
       >
         {isProcessing || confirmPayment.isPending ? "Processing..." : "Pay Now"}
       </button>
@@ -195,12 +170,10 @@ function PaymentPageContent() {
   // Clear cart hook
   const clearCart = useClearCart();
   // Remove from cart hook
-  const removeFromCartMutation = useRemoveFromCart();
   // Validate cart state
   const cartValidation = useValidateCart();
   // Check if user is authenticated and get profile
   const { isAuthenticated, user, isLoading: isAuthLoading } = useAuth();
-  const logout = useLogout();
   // Fetch user addresses for logged-in users
   const { data: addresses, isLoading: isAddressesLoading } = useAddresses();
   const router = useRouter();
@@ -222,7 +195,7 @@ function PaymentPageContent() {
             id: item.id.toString(),
             image: item.menu_item.image || "/images/Food.png",
             name: item.menu_item.name,
-            price: `$${item.menu_item.price.toFixed(2)}`,
+            price: `${item.menu_item.price.toFixed(2)} CHF`,
             qty: item.quantity,
           });
         } else if (item.nowaste_item) {
@@ -230,7 +203,7 @@ function PaymentPageContent() {
             id: item.id.toString(),
             image: item.nowaste_item.image || "/images/Food.png",
             name: item.nowaste_item.name,
-            price: `$${item.nowaste_item.price.toFixed(2)}`,
+            price: `${item.nowaste_item.price.toFixed(2)} CHF`,
             qty: item.quantity,
           });
         }
@@ -244,8 +217,6 @@ function PaymentPageContent() {
   }, [apiCart, isCartLoading]);
 
   const [deliveryType, setDeliveryType] = useState<"delivery" | "pickup">("delivery");
-  const [promoCode, setPromoCode] = useState("");
-  const [selectedTip, setSelectedTip] = useState<number>(10);
 
   const [guestInfo, setGuestInfo] = useState<GuestInfo>({
     firstName: "",
@@ -258,14 +229,16 @@ function PaymentPageContent() {
     deliveryNotes: "",
     preferredTime: "",
     receiveNotifications: false,
+    tipAmount: "",
   });
 
   useEffect(() => {
     const legacyQuerySecret = searchParams.get("client_secret");
-    const storedSecret = sessionStorage.getItem("checkout_client_secret");
-    setClientSecret(storedSecret || legacyQuerySecret);
+    // A PaymentIntent belongs to one exact cart snapshot and may already be
+    // confirmed. Never revive a previous checkout secret for a new cart.
+    sessionStorage.removeItem("checkout_client_secret");
+    setClientSecret(null);
     if (legacyQuerySecret) {
-      sessionStorage.setItem("checkout_client_secret", legacyQuerySecret);
       router.replace("/payment");
     }
   }, [router, searchParams]);
@@ -369,64 +342,7 @@ function PaymentPageContent() {
     }
   }, [isAuthenticated, addresses, isAddressesLoading, isAuthLoading, searchParams]);
 
-  const minimumDeliveryAmount = 15;
-
-  const removeFromCart = (itemId: string) => {
-    // Update local state immediately for responsive UI
-    setCartItems((prev) => prev.filter((item) => item.id !== itemId));
-
-    // Send removal request to backend
-    const numericId = parseInt(itemId, 10);
-    if (!isNaN(numericId)) {
-      removeFromCartMutation.mutate(numericId, {
-        onSuccess: () => {
-          // Refetch cart to ensure sync with backend
-          refetchCart();
-        },
-        onError: (error) => {
-          console.error("Failed to remove item from cart:", error);
-          // Optionally: restore the item in local state on error
-          // For now, refetch to get the actual cart state
-          refetchCart();
-        },
-      });
-    }
-  };
-
-  const updateQuantity = (itemId: string, newQty: number) => {
-    if (newQty <= 0) {
-      removeFromCart(itemId);
-      return;
-    }
-
-    setCartItems((prev) =>
-      prev.map((item) => (item.id === itemId ? { ...item, qty: newQty } : item))
-    );
-  };
-
-  const addUpsellItem = (item: UpsellItem) => {
-    const newCartItem: CartItem = {
-      id: item.id,
-      image: item.image,
-      name: item.name,
-      price: item.price,
-      qty: 1,
-    };
-    setCartItems((prev) => [...prev, newCartItem]);
-  };
-
-  const calculateTotal = () => {
-    return cartItems.reduce((total, item) => {
-      const price = Number.parseFloat(item.price.replace("$", "").trim());
-      return total + price * item.qty;
-    }, 0);
-  };
-
-  const subtotal = calculateTotal();
-  const deliveryFee = deliveryType === "delivery" ? 9.2 : 0;
-  const taxes = subtotal * 0.15;
-  const tipAmount = (subtotal * selectedTip) / 100;
-  const total = subtotal + deliveryFee + taxes + tipAmount;
+  const subtotal = getCartTotal(apiCart);
 
   const handleGuestInfoChange = (field: keyof GuestInfo, value: string | boolean) => {
     setGuestInfo((prev) => ({
@@ -456,10 +372,12 @@ function PaymentPageContent() {
       delivery_city: guestInfo.city || "",
       delivery_phone: guestInfo.phone,
       delivery_email: guestInfo.email,
+      tip_amount: guestInfo.tipAmount ? Number(guestInfo.tipAmount) : undefined,
     };
   };
 
   const handlePaymentSuccess = (orderId: number) => {
+    sessionStorage.removeItem("checkout_client_secret");
     setPaymentSuccess(true);
     setTimeout(() => {
       router.push(`/order-confirmation?id=${orderId}`);
@@ -613,122 +531,60 @@ function PaymentPageContent() {
     const now = new Date();
     for (let i = 1; i <= 8; i++) {
       const time = new Date(now.getTime() + i * 30 * 60000);
-      options.push(time.toLocaleTimeString('en-US', {
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: true
-      }));
+      options.push({
+        value: time.toISOString(),
+        label: time.toLocaleTimeString("en-US", {
+          hour: "2-digit",
+          minute: "2-digit",
+          hour12: true,
+        }),
+      });
     }
     return options;
   };
 
   return (
-    <div className="bg-white">
-      {/* Header */}
-      <header className="fixed top-0 left-0 w-full z-50 bg-white border-b border-gray-400">
-        <div className="max-w-[1400px] mx-auto flex items-center justify-between px-4 sm:px-6 lg:px-8 py-4 lg:py-6 min-h-[64px]">
-          {/* Back Button */}
+    <div className="checkout-theme min-h-screen bg-[#fbfaf8] text-[#241f1c]">
+      <header className="sticky left-0 top-0 z-50 w-full border-b border-[#ece3de] bg-white/90 backdrop-blur-xl">
+        <div className="mx-auto grid min-h-[72px] max-w-6xl grid-cols-[1fr_auto_1fr] items-center px-4 sm:px-8">
           <Link
-            href={"/partners"}
-            className="mr-4 lg:mr-6 flex items-center justify-center w-10 h-10 rounded-lg hover:bg-gray-100 cursor-pointer"
+            href="/cart"
+            className="flex w-fit items-center gap-2 rounded-xl px-2 py-2 text-sm font-bold text-[#665b55] transition hover:bg-[#f7f1ee] hover:text-[#b63825]"
           >
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M19 12H5M12 19l-7-7 7-7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
+            <ArrowLeft size={18} />
+            <span className="hidden sm:inline">Back to cart</span>
           </Link>
 
-          <Link href="/" className="flex items-center mr-4 lg:mr-8 cursor-pointer">
-            <span
-              className="text-[20px] sm:text-[24px] lg:text-[32px] font-extrabold select-none"
-              style={{ fontFamily: "Abril Fatface, serif" }}
-            >
-              <span className="text-[#CD3625]">FOOD</span>
-              <span className="text-black">DELY</span>
-            </span>
+          <Link href="/" className="text-[24px] font-black tracking-[-0.04em]">
+            <span className="text-[#c83b2b]">FOOD</span>DELY
           </Link>
 
-          <div className="flex-1" />
-
-          <div className="flex items-center gap-3 mr-4 lg:mr-6">
-            {/* Cart */}
-            <Link href="/cart" className="relative flex items-center justify-center w-12 h-12 lg:w-14 lg:h-14 rounded-full bg-[#F7F8FD] cursor-pointer hover:bg-gray-100 transition">
-              <Image
-                src="/images/cart-icon.svg"
-                alt="Cart"
-                width={20}
-                height={20}
-                className="lg:w-6 lg:h-6"
-              />
+          <div className="flex justify-end">
+            <Link href="/cart" className="relative flex h-10 w-10 items-center justify-center rounded-xl bg-[#fff0eb] text-[#b63825] transition hover:bg-[#ffe5dd]">
+              <ShoppingBag size={20} />
               {apiCart?.items && apiCart.items.length > 0 && (
-                <div className="absolute -top-1 -right-1 bg-[#CD3625] text-white text-xs font-bold w-5 h-5 flex items-center justify-center rounded-full border-2 border-white">
+                <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-[#c83b2b] px-1 text-[10px] font-black text-white">
                   {apiCart.items.reduce((sum, item) => sum + item.quantity, 0)}
-                </div>
+                </span>
               )}
             </Link>
-            {/* Notification Bell */}
-            <div className="relative">
-              <button className="flex items-center justify-center w-12 h-12 lg:w-14 lg:h-14 rounded-full bg-[#F7F8FD] cursor-pointer">
-                <Image
-                  src="/images/star-icon.svg"
-                  alt="Notifications"
-                  width={20}
-                  height={20}
-                  className="lg:w-6 lg:h-6"
-                />
-              </button>
-              <div className="absolute -top-1 -right-1 w-4 h-4 bg-[#CD3625] rounded-full border-2 border-white"></div>
-            </div>
-          </div>
-
-          <div className="hidden md:flex items-center gap-8">
-            {!isAuthLoading && (
-              <>
-                {!isAuthenticated ? (
-                  <>
-                    <Link
-                      href="/signin"
-                      className="text-yellow-600 text-[16px] lg:text-[18px] underline hover:text-yellow-700"
-                    >
-                      Sign In
-                    </Link>
-                    <Link
-                      href="/signup"
-                      className="bg-[#CD3625] text-white cursor-pointer px-6 lg:px-8 py-2.5 lg:py-3.5 rounded-full font-semibold hover:bg-[#b83213] transition text-sm lg:text-base">
-                      Sign Up
-                    </Link>
-                  </>
-                ) : (
-                  <div className="flex items-center gap-4">
-                    <Link
-                      href="/orders"
-                      className="text-black text-[16px] hover:text-gray-600 font-medium"
-                    >
-                      Orders
-                    </Link>
-                    <Link
-                      href="/profile"
-                      className="text-black text-[16px] hover:text-gray-600 font-medium"
-                    >
-                      {user?.firstname || "Profile"}
-                    </Link>
-                    <button
-                      onClick={() => {
-                        logout();
-                        window.location.href = "/";
-                      }}
-                      className="bg-gray-200 text-black px-4 py-2 rounded-full font-medium hover:bg-gray-300 transition text-sm"
-                    >
-                      Logout
-                    </button>
-                  </div>
-                )}
-              </>
-            )}
           </div>
         </div>
       </header>
 
-      <div className="bg-white min-h-screen max-w-[1400px] mx-auto pt-24 lg:pt-28">
+      <div className="mx-auto min-h-screen max-w-6xl px-4 py-8 sm:px-8 sm:py-12">
+        <div className="mb-8 max-w-2xl">
+          <div className="mb-3 flex items-center gap-2 text-xs font-bold uppercase tracking-[0.17em] text-[#b63825]">
+            <LockKeyhole size={15} />
+            Secure checkout
+          </div>
+          <h1 className="text-3xl font-black tracking-[-0.04em] sm:text-4xl">
+            Complete your order
+          </h1>
+          <p className="mt-2 text-sm leading-6 text-[#7d716a]">
+            Confirm your details, choose delivery or pickup, and pay securely.
+          </p>
+        </div>
 
         {/* Tabs */}
         {/* <div className="flex flex-col sm:flex-row gap-2 sm:gap-4 px-4 sm:px-16 mt-4 sm:mt-8 mb-4 sm:mb-8">
@@ -740,63 +596,59 @@ function PaymentPageContent() {
           </button>
         </div> */}
 
-        <div className="flex flex-col lg:flex-row justify-between gap-4 sm:gap-6 lg:gap-8 mx-auto px-4 sm:px-8 lg:px-16">
+        <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
           <div className="flex-1 max-w-full lg:max-w-[840px]">
             {/* Delivery/Pickup Toggle */}
-            <div className="bg-white rounded-2xl sm:rounded-3xl shadow p-4 sm:p-6 lg:p-10 mb-4 sm:mb-6 lg:mb-8">
-              <div className="text-xl sm:text-2xl font-bold mb-4 sm:mb-6 lg:mb-8 text-[#222]">
-                Delivery or Pickup
+            <div className="rounded-[26px] border border-[#e9dfda] bg-white p-5 shadow-[0_16px_45px_rgba(55,35,27,0.06)] sm:p-7 lg:p-8">
+              <div className="mb-5 flex items-center gap-3">
+                <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#fff0eb] text-[#b63825]">
+                  <Truck size={21} />
+                </div>
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-[0.14em] text-[#b63825]">Fulfilment</p>
+                  <div className="text-xl font-black text-[#222]">
+                    Delivery details
+                  </div>
+                </div>
               </div>
-              <div className="flex gap-4 mb-6">
+              <div className="mb-8 grid grid-cols-2 gap-2 rounded-2xl bg-[#f8f3f0] p-1.5">
                 <button
-                  className={`flex-1 py-3 px-6 rounded-xl border-2 font-medium transition ${deliveryType === "delivery"
-                    ? "border-[#CD3625] bg-[#CD3625] text-white"
-                    : "border-gray-300 text-gray-600 hover:border-[#CD3625]"
+                  className={`flex min-h-12 items-center justify-center gap-2 rounded-xl px-4 font-bold transition ${deliveryType === "delivery"
+                    ? "bg-white text-[#b63825] shadow-sm"
+                    : "text-[#766a64] hover:text-[#b63825]"
                     }`}
                   onClick={() => setDeliveryType("delivery")}
                 >
+                  <Truck size={18} />
                   Delivery
                 </button>
                 <button
-                  className={`flex-1 py-3 px-6 rounded-xl border-2 font-medium transition ${deliveryType === "pickup"
-                    ? "border-[#CD3625] bg-[#CD3625] text-white"
-                    : "border-gray-300 text-gray-600 hover:border-[#CD3625]"
+                  className={`flex min-h-12 items-center justify-center gap-2 rounded-xl px-4 font-bold transition ${deliveryType === "pickup"
+                    ? "bg-white text-[#b63825] shadow-sm"
+                    : "text-[#766a64] hover:text-[#b63825]"
                     }`}
-                  onClick={() => setDeliveryType("pickup")}
+                  disabled
+                  title="Pickup checkout is not available yet"
                 >
-                  Pickup
+                  <PackageCheck size={18} />
+                  Pickup unavailable
                 </button>
               </div>
 
-              {/* Minimum Delivery Amount Warning */}
-              {deliveryType === "delivery" && subtotal < minimumDeliveryAmount && (
-                <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4 mb-6">
-                  <div className="flex items-center gap-2">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-                      <circle cx="12" cy="12" r="10" stroke="#F59E0B" strokeWidth="2" />
-                      <path d="M12 6v6l4 2" stroke="#F59E0B" strokeWidth="2" strokeLinecap="round" />
-                    </svg>
-                    <span className="text-yellow-800 font-medium">
-                      You need ${(minimumDeliveryAmount - subtotal).toFixed(2)} more for delivery
-                    </span>
-                  </div>
-                </div>
-              )}
-
               {/* Guest Checkout Section */}
               <div className="mb-6">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-lg font-semibold text-[#222]">
+                <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                  <h3 className="text-lg font-black text-[#222]">
                     {isAuthenticated ? "Delivery Information" : "Guest Checkout"}
                   </h3>
                   {isAuthenticated && (
-                    <span className="text-sm text-gray-600 bg-green-50 px-3 py-1 rounded-full border border-green-200">
+                    <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700">
                       Logged in as {user?.email}
                     </span>
                   )}
                 </div>
 
-                <div className="bg-gray-50 rounded-xl p-6 mb-4">
+                <div className="mb-4 rounded-2xl border border-[#eee4df] bg-[#fcfaf9] p-4 sm:p-5">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -889,23 +741,23 @@ function PaymentPageContent() {
                         </div>
                       </>
                     )}
-                    <div className="sm:col-span-2">
+                    <div className="hidden sm:col-span-2">
                       <label className="block text-sm font-medium text-gray-700 mb-1">
                         Preferred {deliveryType === "delivery" ? "Delivery" : "Pickup"} Time
                       </label>
                       <select
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#CD3625] focus:border-transparent"
+                        className="h-12 w-full appearance-none border border-gray-300 bg-white px-4 py-0 text-base leading-normal focus:border-transparent focus:ring-2 focus:ring-[#CD3625]"
                         value={guestInfo.preferredTime}
                         onChange={(e) => handleGuestInfoChange("preferredTime", e.target.value)}
                       >
                         <option value="">Select a time</option>
                         {getDeliveryTimeOptions().map((time) => (
-                          <option key={time} value={time}>{time}</option>
+                          <option key={time.value} value={time.value}>{time.label}</option>
                         ))}
                       </select>
                     </div>
                     {deliveryType === "delivery" && (
-                      <div className="sm:col-span-2">
+                      <div className="hidden sm:col-span-2">
                         <label className="block text-sm font-medium text-gray-700 mb-1">
                           Delivery Notes
                         </label>
@@ -942,7 +794,7 @@ function PaymentPageContent() {
                     </div>
                   )}
 
-                  <div className="flex items-center gap-2">
+                  <div className="hidden items-center gap-2">
                     <input
                       type="checkbox"
                       id="notifications"
@@ -954,52 +806,16 @@ function PaymentPageContent() {
                       Receive notifications on deals, discounts, and loyalty offers
                     </label>
                   </div>
-                </div>
-              </div>
-
-              {/* Promo Code */}
-              <div className="mb-6">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Promo Code
-                </label>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#CD3625] focus:border-transparent"
-                    placeholder="Enter promo code"
-                    value={promoCode}
-                    onChange={(e) => setPromoCode(e.target.value)}
-                  />
-                  <button className="px-4 py-2 bg-[#CD3625] text-white rounded-lg hover:bg-red-600 transition">
-                    Apply
-                  </button>
-                </div>
-              </div>
-
-              {/* Tip Section */}
-              <div className="mb-6">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Tip for the delivery driver
-                </label>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                  {[5, 10, 20, 50].map((tip) => (
-                    <button
-                      key={tip}
-                      className={`py-2 px-4 rounded-lg border-2 font-medium transition ${selectedTip === tip
-                        ? "border-[#CD3625] bg-[#CD3625] text-white"
-                        : "border-gray-300 text-gray-600 hover:border-[#CD3625]"
-                        }`}
-                      onClick={() => setSelectedTip(tip)}
-                    >
-                      {tip}%
-                    </button>
-                  ))}
+                  <div className="mt-4 border-t border-[#eee4df] pt-4">
+                    <label className="block text-sm font-bold text-gray-700">Optional tip (CHF)</label>
+                    <input type="number" min="0" max="200" step="0.01" inputMode="decimal" value={guestInfo.tipAmount} onChange={e=>handleGuestInfoChange("tipAmount", e.target.value)} placeholder="0.00" className="mt-2 h-12 w-full rounded-xl border border-gray-300 bg-white px-4 outline-none focus:border-[#CD3625] focus:ring-2 focus:ring-[#CD3625]/15" />
+                  </div>
                 </div>
               </div>
 
 
 
-              <div className="bg-[#E9FAF1] rounded-xl sm:rounded-2xl p-4 sm:p-6 lg:p-8 mb-4 sm:mb-6 lg:mb-8 border border-[#D9F5E6] max-w-full lg:max-w-[900px] mx-auto">
+              <div className="hidden">
                 {/* <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 mb-4 sm:mb-6">
                   <div className="flex items-center gap-2">
                     <svg width="28" height="28" fill="none" viewBox="0 0 24 24">
@@ -1283,22 +1099,57 @@ function PaymentPageContent() {
                   <button
                     onClick={handleCreatePaymentIntent}
                     disabled={createPaymentIntent.isPending}
-                    className="w-full sm:w-[240px] bg-[#CD3625] hover:bg-red-600 text-white font-bold py-3 sm:py-2 rounded-full whitespace-nowrap text-lg sm:text-[24px] flex items-center justify-center gap-2 shadow-lg transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed mx-auto"
+                    className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#c83b2b] px-5 text-base font-black text-white shadow-[0_12px_28px_rgba(200,59,43,0.22)] transition hover:-translate-y-0.5 hover:bg-[#ad321f] disabled:cursor-not-allowed disabled:opacity-50"
                   >
+                    <CreditCard size={19} />
                     {createPaymentIntent.isPending ? "Preparing payment..." : "Continue to Payment"}
                   </button>
                 </div>
               )}
 
               {/* Stripe Payment Form */}
-              {clientSecret && (
-                <div className="mb-4 sm:mb-6 lg:mb-8">
+              {clientSecret && !stripePromise && (
+                <div className="mb-6 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+                  <p className="font-black">Stripe configuration is required</p>
+                  <p className="mt-1 leading-6">
+                    Add a valid <code>NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY</code>{" "}
+                    to the local environment, then rebuild the app.
+                  </p>
+                </div>
+              )}
+
+              {clientSecret && stripePromise && (
+                <div className="mb-6 rounded-2xl border border-[#e8ddd7] bg-white p-4 sm:p-5">
                   <Elements
                     stripe={stripePromise}
                     options={{
                       clientSecret,
                       appearance: {
                         theme: "stripe",
+                        variables: {
+                          colorPrimary: "#c83b2b",
+                          colorText: "#241f1c",
+                          colorBackground: "#ffffff",
+                          colorDanger: "#b42318",
+                          borderRadius: "12px",
+                          fontFamily: "system-ui, sans-serif",
+                          spacingUnit: "4px",
+                        },
+                        rules: {
+                          ".Input": {
+                            border: "1px solid #d9cec8",
+                            boxShadow: "none",
+                            padding: "13px 14px",
+                          },
+                          ".Input:focus": {
+                            border: "1px solid #c83b2b",
+                            boxShadow: "0 0 0 4px rgba(200,59,43,.10)",
+                          },
+                          ".Label": {
+                            fontWeight: "600",
+                            color: "#4f4641",
+                          },
+                        },
                       },
                     }}
                   >
@@ -1323,13 +1174,20 @@ function PaymentPageContent() {
               )}
             </div>
           </div>
-          <div className="w-full lg:w-[380px] flex-shrink-0">
-            <div className="bg-white rounded-xl sm:rounded-2xl shadow p-4 sm:p-6 mb-4 sm:mb-6">
-              <div className="text-base sm:text-[18px] text-[#444] font-normal mb-1">
-                Order Summary
-              </div>
-              <div className="text-xl sm:text-[28px] font-medium text-[#222] mb-4 sm:mb-6 leading-tight">
-                Pizza chez Mamma
+          <div className="w-full">
+            <div className="rounded-[24px] border border-[#3a2b26] bg-[#241b18] p-5 text-white shadow-[0_22px_55px_rgba(42,28,22,0.18)] lg:sticky lg:top-24">
+              <div className="mb-5 flex items-center justify-between">
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-[0.15em] text-[#ff9b8f]">
+                    Your order
+                  </p>
+                  <h2 className="mt-1 text-xl font-black text-white">
+                    Order summary
+                  </h2>
+                </div>
+                <Link href="/cart" className="text-sm font-bold text-[#ff9b8f] hover:underline">
+                  Edit cart
+                </Link>
               </div>
               {/* Cart Items */}
               <div className="flex flex-col gap-4 sm:gap-6 mb-6 sm:mb-8">
@@ -1339,157 +1197,89 @@ function PaymentPageContent() {
                     className="flex items-center gap-3 sm:gap-4"
                   >
                     <div className="w-[80px] h-[56px] sm:w-[100px] sm:h-[70px] rounded-xl overflow-hidden relative flex-shrink-0">
-                      <Image
+                      <SafeImage
                         src={item.image}
                         alt={item.name}
                         fill
                         className="object-cover"
+                        fallbackClassName="object-contain bg-[#fff8f5] p-4"
                       />
                     </div>
                     <div className="flex-1 min-w-0 flex flex-col justify-center">
                       <div className="flex items-center justify-between w-full">
-                        <div className="text-base sm:text-[18px] font-normal text-[#222] truncate">
+                        <div className="truncate text-sm font-bold text-white">
                           {item.name}
                         </div>
-                        <div className="text-sm sm:text-[16px] font-normal text-[#222] ml-2 sm:ml-4">
+                        <div className="ml-2 text-xs font-bold text-stone-300">
                           {item.price}
                         </div>
                       </div>
-                      <div className="flex items-center justify-between gap-2 mt-2">
-                        <div className="flex items-center border border-gray-200 rounded-lg px-2 py-1 bg-white">
-                          <button
-                            className="w-5 h-5 sm:w-6 sm:h-6 flex items-center justify-center text-lg sm:text-[20px] font-medium text-[#222]"
-                            onClick={() =>
-                              updateQuantity(item.id, item.qty - 1)
-                            }
-                          >
-                            -
-                          </button>
-                          <span className="mx-1 sm:mx-2 text-base sm:text-[18px] font-medium text-[#222]">
-                            {item.qty}
-                          </span>
-                          <button
-                            className="w-5 h-5 sm:w-6 sm:h-6 flex items-center justify-center text-lg sm:text-[20px] font-medium text-[#222]"
-                            onClick={() =>
-                              updateQuantity(item.id, item.qty + 1)
-                            }
-                          >
-                            +
-                          </button>
-                        </div>
-                        <button
-                          className="ml-2 cursor-pointer"
-                          onClick={() => removeFromCart(item.id)}
-                        >
-                          <Image
-                            src="/images/delete-icon.svg"
-                            alt="Delete"
-                            width={18}
-                            height={18}
-                            className="w-5 h-5 sm:w-6 sm:h-6"
-                          />
-                        </button>
-                      </div>
+                      <p className="mt-1 text-xs font-semibold text-stone-400">
+                        Quantity {item.qty}
+                      </p>
                     </div>
                   </div>
                 ))}
               </div>
               {/* Cart Summary */}
-              <div className="border-t border-gray-200 pt-6 sm:pt-8 mt-2 flex flex-col gap-1.5 text-sm sm:text-[17px] text-[#222]">
+              <div className="mt-2 flex flex-col gap-2 border-t border-white/10 pt-5 text-sm text-stone-300">
                 <div className="flex justify-between">
-                  <span>Sub total</span>
-                  <span>${subtotal.toFixed(2)}</span>
+                  <span>Cart total</span>
+                  <span>{subtotal.toFixed(2)} CHF</span>
                 </div>
-                <div className="flex justify-between">
-                  <span>{deliveryType === "delivery" ? "Delivery fee" : "Pickup fee"}</span>
-                  <span>${deliveryFee.toFixed(2)}</span>
+                <div className="my-2 border-t border-white/10" />
+                <div className="mt-1 flex items-center justify-between text-xl font-black text-white">
+                  <span>Payable amount</span>
+                  <span className="font-semibold">{subtotal.toFixed(2)} CHF</span>
                 </div>
-                <div className="flex justify-between">
-                  <span>Taxes</span>
-                  <span>${taxes.toFixed(2)}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Tip ({selectedTip}%)</span>
-                  <span>${tipAmount.toFixed(2)}</span>
-                </div>
-                <div className="border-t border-gray-200 my-2" />
-                <div className="flex justify-between items-center font-medium text-lg sm:text-[24px] mt-2">
-                  <span>Total</span>
-                  <span className="font-semibold">${total.toFixed(2)}</span>
-                </div>
+                <p className="flex items-start gap-2 pt-2 text-xs leading-5 text-stone-400">
+                  <LockKeyhole className="mt-0.5 shrink-0" size={14} />
+                  The backend and Stripe confirm the final payment amount.
+                </p>
               </div>
-            </div>
-
-            {/* Upsell Section */}
-            <div className="bg-white rounded-xl sm:rounded-2xl shadow p-4 sm:p-6 mb-4 sm:mb-6">
-              <div className="text-lg font-semibold text-[#222] mb-4">
-                Add to your order
-              </div>
-              <div className="space-y-4">
-                {upsellItems.map((item) => (
-                  <div key={item.id} className="flex items-center gap-3 p-3 border border-gray-200 rounded-lg hover:border-[#CD3625] transition">
-                    <div className="w-16 h-16 rounded-lg overflow-hidden relative flex-shrink-0">
-                      <Image
-                        src={item.image}
-                        alt={item.name}
-                        fill
-                        className="object-cover"
-                      />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="font-medium text-[#222]">{item.name}</div>
-                      <div className="text-sm text-gray-600">{item.description}</div>
-                      <div className="text-sm font-medium text-[#CD3625]">{item.price}</div>
-                    </div>
-                    <button
-                      className="px-3 py-1 bg-[#CD3625] text-white rounded-lg hover:bg-red-600 transition text-sm"
-                      onClick={() => addUpsellItem(item)}
-                    >
-                      Add
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Order Details Section */}
-            <div className="bg-white rounded-xl sm:rounded-2xl shadow p-4 sm:p-6">
-              <div className="text-lg font-semibold text-[#222] mb-4">
-                Order Details
+              <div className="mt-6 border-t border-white/10 pt-5">
+              <div className="mb-4 flex items-center gap-2 text-sm font-black text-white">
+                <MapPin size={16} className="text-[#ff9b8f]" />
+                Order details
               </div>
               <div className="space-y-3 text-sm">
                 <div className="flex justify-between">
-                  <span className="text-gray-600">Name:</span>
-                  <span className="font-medium">
+                  <span className="text-stone-400">Name</span>
+                  <span className="max-w-[190px] text-right font-semibold">
                     {guestInfo.firstName} {guestInfo.lastName}
                   </span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-gray-600">Phone:</span>
-                  <span className="font-medium">{guestInfo.phone}</span>
+                  <span className="text-stone-400">Phone</span>
+                  <span className="max-w-[190px] text-right font-semibold">{guestInfo.phone || "—"}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-gray-600">Email:</span>
-                  <span className="font-medium">{guestInfo.email}</span>
+                  <span className="text-stone-400">Email</span>
+                  <span className="max-w-[190px] truncate text-right font-semibold">{guestInfo.email || "—"}</span>
                 </div>
                 {deliveryType === "delivery" && (
                   <div className="flex justify-between">
-                    <span className="text-gray-600">Address:</span>
-                    <span className="font-medium">{guestInfo.address}</span>
+                    <span className="text-stone-400">Address</span>
+                    <span className="max-w-[190px] text-right font-semibold">{guestInfo.address || "—"}</span>
                   </div>
                 )}
                 {guestInfo.preferredTime && (
                   <div className="flex justify-between">
-                    <span className="text-gray-600">Preferred Time:</span>
+                    <span className="text-stone-400">Preferred time</span>
                     <span className="font-medium">{guestInfo.preferredTime}</span>
                   </div>
                 )}
                 {guestInfo.deliveryNotes && (
                   <div className="flex justify-between">
-                    <span className="text-gray-600">Notes:</span>
+                    <span className="text-stone-400">Notes</span>
                     <span className="font-medium">{guestInfo.deliveryNotes}</span>
                   </div>
                 )}
+              </div>
+              </div>
+              <div className="mt-5 flex items-center gap-2 rounded-xl bg-white/5 px-3 py-3 text-xs font-semibold text-stone-300">
+                <CheckCircle2 size={16} className="text-emerald-400" />
+                Secure checkout powered by Stripe
               </div>
             </div>
           </div>

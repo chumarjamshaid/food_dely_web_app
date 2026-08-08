@@ -1,8 +1,9 @@
 "use client";
 import { useConfirmPayment } from "@/lib/api";
+import { extractApiError } from "@/lib/api/error";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 
 function PaymentCallbackContent() {
   const router = useRouter();
@@ -12,14 +13,15 @@ function PaymentCallbackContent() {
   const [status, setStatus] = useState<"processing" | "success" | "error">("processing");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [orderId, setOrderId] = useState<number | null>(null);
+  const confirmationStarted = useRef(false);
 
   // Get Stripe params from URL
   const paymentIntent = searchParams.get("payment_intent");
   const redirectStatus = searchParams.get("redirect_status");
 
   useEffect(() => {
-    // Only run once
-    if (status !== "processing") return;
+    if (status !== "processing" || confirmationStarted.current) return;
+    confirmationStarted.current = true;
 
     const confirmOrder = async () => {
       // Validate we have the required params
@@ -59,16 +61,10 @@ function PaymentCallbackContent() {
           },
           onError: (err: unknown) => {
             console.error("Failed to confirm payment:", err);
-            const error = err as {
-              response?: { data?: { message?: string; error?: string } };
-            };
-            const message =
-              error?.response?.data?.message ||
-              error?.response?.data?.error ||
-              "Failed to confirm payment. Please contact support.";
+            const message = extractApiError(err, "Failed to confirm payment. Please contact support.");
 
             // Check for specific error codes
-            if (message.includes("payment_already_confirmed")) {
+            if (message.toLowerCase().includes("already") && message.toLowerCase().includes("confirm")) {
               // Payment was already confirmed - try to get the order
               setStatus("success");
               setErrorMessage("Payment was already processed. Redirecting to your orders...");

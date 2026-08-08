@@ -186,19 +186,19 @@ function OrderConfirmationContent() {
                                 Order #{order.id}
                             </h2>
                             <p className="text-gray-600 text-sm">
-                                Placed on {new Date(order.created_at).toLocaleDateString("en-US", {
+                                Placed on {order.placed || (order.created_at ? new Date(order.created_at).toLocaleDateString("en-US", {
                                     year: "numeric",
                                     month: "long",
                                     day: "numeric",
                                     hour: "2-digit",
                                     minute: "2-digit",
-                                })}
+                                }) : "Recently")}
                             </p>
                         </div>
                         <span
-                            className={`px-4 py-2 rounded-full text-sm font-semibold ${order.status === "PLACED"
+                            className={`px-4 py-2 rounded-full text-sm font-semibold ${order.status === "placed"
                                     ? "bg-blue-100 text-blue-700"
-                                    : order.status === "PREPARING"
+                                    : order.status === "preparing"
                                         ? "bg-yellow-100 text-yellow-700"
                                         : "bg-green-100 text-green-700"
                                 }`}
@@ -295,7 +295,7 @@ function OrderConfirmationContent() {
                     <div className="flex justify-between items-center">
                         <span className="text-lg font-semibold text-black">Total</span>
                         <span className="text-2xl font-bold text-[#CD3625]">
-                            {order?.price?.toFixed(2)} CHF
+                            {Number(order?.total ?? order?.price ?? 0).toFixed(2)} CHF
                         </span>
                     </div>
                 </div>

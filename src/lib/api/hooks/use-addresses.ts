@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../client";
-import type { CreateCustomerAddressRequest, CustomerAddress } from "../types";
+import type { CreateCustomerAddressRequest, CustomerAddress, UpdateCustomerAddressRequest } from "../types";
 import { customerKeys } from "./use-customer";
 
 // Query keys for addresses
@@ -40,6 +40,17 @@ async function createAddress(
 async function deleteAddress(id: number): Promise<CustomerAddress[]> {
   const response = await apiClient.delete<CustomerAddress[]>(
     `/api/app/customer/addresses/${id}/`
+  );
+  return response.data;
+}
+
+async function updateAddress(id: number, data: UpdateCustomerAddressRequest): Promise<CustomerAddress> {
+  const formData = new FormData();
+  formData.append("data", JSON.stringify(data));
+  const response = await apiClient.patch<CustomerAddress>(
+    `/api/app/customer/addresses/${id}/`,
+    formData,
+    { headers: { "Content-Type": "multipart/form-data" } },
   );
   return response.data;
 }
@@ -94,6 +105,17 @@ export function useDeleteAddress() {
     onSuccess: () => {
       // Invalidate addresses list to refetch
       queryClient.invalidateQueries({ queryKey: addressKeys.list() });
+    },
+  });
+}
+
+export function useUpdateAddress() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, data }: { id: number; data: UpdateCustomerAddressRequest }) => updateAddress(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: addressKeys.list() });
+      queryClient.invalidateQueries({ queryKey: customerKeys.profile() });
     },
   });
 }
