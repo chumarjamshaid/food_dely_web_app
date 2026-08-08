@@ -46,7 +46,6 @@ For a manually configured service, use:
 Add these environment variables in the Render dashboard before deploying:
 
 ```text
-NODE_ENV=production
 NEXT_PUBLIC_API_URL=https://backend.fooddely.com
 NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_test_or_live_value_from_Stripe
 ```

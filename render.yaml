@@ -8,8 +8,6 @@ services:
     healthCheckPath: /
     autoDeployTrigger: commit
     envVars:
-      - key: NODE_ENV
-        value: production
       - key: NEXT_PUBLIC_API_URL
         value: https://backend.fooddely.com
       - key: NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
