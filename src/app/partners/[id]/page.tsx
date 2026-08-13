@@ -7,20 +7,25 @@ import {
   useRemoveFromCart,
   useRestaurantDetail
 } from "@/lib/api";
-import type { MenuItemResponse } from "@/lib/api/types";
+import type { MenuItemOptionResponse, MenuItemResponse } from "@/lib/api/types";
 import SafeImage from "@/components/SafeImage";
+import * as Popover from "@radix-ui/react-popover";
 import {
   clearCartRestaurantId,
   getCartRestaurantId,
+  getCartRestaurantName,
   setCartRestaurantId,
 } from "@/lib/cart-restaurant";
 import { getCartTotal } from "@/lib/cart-total";
+import { getTodayOpeningHours } from "@/lib/opening-hours";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { use, useEffect, useRef, useState } from "react";
 import {
   ArrowLeft,
+  Check,
+  ChevronDown,
   Clock3,
   LogOut,
   MapPin,
@@ -75,6 +80,7 @@ export default function PartnerDetailPage({ params }: { params: Promise<{ id: st
         delivery_fee: apiRestaurant.delivery_fee || 0,
         min_amount: apiRestaurant.min_amount || 0,
         open: apiRestaurant.open || false,
+        openings: apiRestaurant.openings,
         no_waste: apiRestaurant.no_waste || false,
       }
     : null;
@@ -198,7 +204,7 @@ export default function PartnerDetailPage({ params }: { params: Promise<{ id: st
       {
         onSuccess: () => {
           setAddingItemId(null);
-          setCartRestaurantId(restaurantId);
+          setCartRestaurantId(restaurantId, restaurant?.name);
           setAddedMessage(`${item.name} added to cart!`);
           setTimeout(() => setAddedMessage(null), 3000);
           refetchCart();
@@ -238,7 +244,7 @@ export default function PartnerDetailPage({ params }: { params: Promise<{ id: st
       {
         onSuccess: () => {
           setAddingItemId(null);
-          setCartRestaurantId(restaurantId);
+          setCartRestaurantId(restaurantId, restaurant?.name);
           setAddedMessage(`${itemName} added to cart!`);
           setTimeout(() => setAddedMessage(null), 3000);
           refetchCart();
@@ -270,6 +276,8 @@ export default function PartnerDetailPage({ params }: { params: Promise<{ id: st
   // Calculate totals from API cart
   const cartItems = apiCart?.items || [];
   const subtotal = getCartTotal(apiCart);
+  const cartRestaurantName = getCartRestaurantName(apiCart) || "another restaurant";
+  const todayHours = getTodayOpeningHours(restaurant?.openings);
 
   // Show loading state
   if (isLoadingRestaurant) {
@@ -306,10 +314,19 @@ export default function PartnerDetailPage({ params }: { params: Promise<{ id: st
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4">
           <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6">
             <h3 className="text-lg font-semibold text-gray-900 mb-2">Different restaurant</h3>
-            <p className="text-gray-600 mb-6">
-              Your cart contains items from another restaurant. Please complete or clear your current order before adding items from a different restaurant.
+            <p className="text-gray-600 mb-3">
+              Your cart contains items from <strong className="text-gray-900">{cartRestaurantName}</strong>.
             </p>
-            <div className="flex justify-end">
+            <p className="text-gray-600 mb-6">
+              Empty your cart before adding items from {restaurant.name}.
+            </p>
+            <div className="flex flex-wrap justify-end gap-3">
+              <Link
+                href="/cart"
+                className="rounded-full border border-gray-300 px-5 py-2.5 font-medium text-gray-700 transition hover:bg-gray-50"
+              >
+                Review cart
+              </Link>
               <button
                 type="button"
                 onClick={() => setShowRestaurantWarning(false)}
@@ -432,7 +449,7 @@ export default function PartnerDetailPage({ params }: { params: Promise<{ id: st
               </div>
               <div className="flex items-center gap-2 rounded-xl bg-[#f8f4f1] px-3 py-2 text-sm font-bold">
                 <Clock3 size={17} className="text-[#b63825]" />
-                {restaurant.open ? "Accepting orders" : "Closed"}
+                {restaurant.open ? "Accepting orders" : todayHours || "Closed"}
               </div>
               {restaurant.delivery_fee > 0 && (
                 <div className="flex items-center gap-2 rounded-xl bg-[#f8f4f1] px-3 py-2 text-sm font-semibold text-[#615750]">
@@ -442,6 +459,31 @@ export default function PartnerDetailPage({ params }: { params: Promise<{ id: st
               )}
             </div>
           </div>
+
+          {/* Mobile cart summary: keep it in the page flow between the
+              restaurant overview and menu navigation. */}
+          {cartItems.length > 0 && (
+            <section className="rounded-[20px] border border-[#e5d9d3] bg-white p-3 shadow-[0_12px_32px_rgba(55,35,27,0.09)] lg:hidden">
+              <div className="flex items-center gap-3">
+                <span className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#fff0eb] text-[#b63825]">
+                  <ShoppingBag size={19} />
+                  <span className="absolute -right-1.5 -top-1.5 grid h-5 min-w-5 place-items-center rounded-full border-2 border-white bg-[#CD3625] px-1 text-[10px] font-black text-white">
+                    {cartItems.reduce((sum, item) => sum + item.quantity, 0)}
+                  </span>
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-xs font-bold text-[#786c66]">Your cart · {restaurant.name}</p>
+                  <p className="mt-0.5 text-base font-black text-[#241f1c]">{subtotal.toFixed(2)} CHF</p>
+                </div>
+                <Link
+                  href="/cart"
+                  className="flex min-h-11 shrink-0 items-center rounded-xl bg-[#CD3625] px-4 text-sm font-bold text-white shadow-md shadow-[#CD3625]/20"
+                >
+                  View cart
+                </Link>
+              </div>
+            </section>
+          )}
 
           {/* Sticky Menu Category Bar */}
           {(foodCategories.length > 0 || (apiRestaurant?.nowaste_items && apiRestaurant.nowaste_items.length > 0)) && (
@@ -515,11 +557,12 @@ export default function PartnerDetailPage({ params }: { params: Promise<{ id: st
                         key={item.id}
                         className="group relative grid w-full overflow-hidden rounded-[22px] border border-emerald-200 bg-white shadow-[0_12px_30px_rgba(22,101,70,0.08)] transition duration-300 hover:-translate-y-1 hover:shadow-lg sm:grid-cols-[150px_1fr]"
                       >
-                        <div className="relative h-[170px] overflow-hidden sm:h-full sm:min-h-[180px]">
+                        <div className="relative h-[170px] overflow-hidden bg-[#f4eeeb] sm:h-[180px]">
                           <SafeImage
                             src={item.image}
                             alt={item.name}
                             fill
+                            sizes="(min-width: 640px) 150px, 100vw"
                             className="object-cover"
                             fallbackClassName="object-contain bg-[#fff8f5] p-6"
                           />
@@ -558,11 +601,12 @@ export default function PartnerDetailPage({ params }: { params: Promise<{ id: st
                         key={item.id}
                         className="group relative grid w-full overflow-hidden rounded-[22px] border border-[#e9dfda] bg-white shadow-[0_12px_30px_rgba(55,35,27,0.06)] transition duration-300 hover:-translate-y-1 hover:border-[#e5b5a9] hover:shadow-[0_20px_45px_rgba(55,35,27,0.11)] sm:grid-cols-[150px_1fr]"
                       >
-                        <div className="relative h-[170px] overflow-hidden sm:h-full sm:min-h-[210px]">
+                        <div className="relative h-[170px] overflow-hidden bg-[#f4eeeb] sm:h-[210px]">
                           <SafeImage
                             src={item.image}
                             alt={item.name}
                             fill
+                            sizes="(min-width: 640px) 150px, 100vw"
                             className="object-cover"
                             fallbackClassName="object-contain bg-[#fff8f5] p-6"
                           />
@@ -583,7 +627,19 @@ export default function PartnerDetailPage({ params }: { params: Promise<{ id: st
                                     <span>{option.name}</span>
                                     <span className="text-[11px] font-semibold text-[#94877f]">{option.required ? "Required" : "Optional"}{option.multiple ? " · Multiple" : ""}</span>
                                   </legend>
-                                  {option.multiple ? (
+                                  {option.multiple && option.items.length > 5 ? (
+                                    <CompactMultiOptionSelector
+                                      optionName={option.name}
+                                      items={option.items}
+                                      selected={(() => {
+                                        const value = selectedOptions[item.id]?.[option.id];
+                                        return Array.isArray(value) ? value : value == null ? [] : [value];
+                                      })()}
+                                      onToggle={(optionItemId) =>
+                                        handleOptionSelect(item.id, option.id, optionItemId, true)
+                                      }
+                                    />
+                                  ) : option.multiple ? (
                                     // Multi-select: Use checkboxes
                                     <div className="grid gap-2 sm:grid-cols-2">
                                       {option.items.map((optionItem) => {
@@ -725,7 +781,7 @@ export default function PartnerDetailPage({ params }: { params: Promise<{ id: st
             </div>
 
             {/* Right: Cart */}
-            <aside className="w-full flex-shrink-0 lg:sticky lg:top-24 lg:w-[330px]">
+            <aside className="hidden w-full flex-shrink-0 lg:sticky lg:top-24 lg:block lg:w-[330px]">
               <div className="mb-6 overflow-hidden rounded-[24px] border border-[#e5d9d3] bg-white shadow-[0_18px_48px_rgba(55,35,27,0.1)]">
                 {/* Cart Title */}
                 <div className="border-b border-[#eee5e0] bg-[#fff9f6] p-5">
@@ -839,5 +895,88 @@ export default function PartnerDetailPage({ params }: { params: Promise<{ id: st
         </main>
       </div>
     </div>
+  );
+}
+
+function CompactMultiOptionSelector({
+  optionName,
+  items,
+  selected,
+  onToggle,
+}: {
+  optionName: string;
+  items: MenuItemOptionResponse[];
+  selected: number[];
+  onToggle: (optionItemId: number) => void;
+}) {
+  const selectedItems = items.filter((item) => selected.includes(item.id));
+  const summary =
+    selectedItems.length === 0
+      ? `Choose ${optionName}`
+      : selectedItems.length <= 2
+        ? selectedItems.map((item) => item.name).join(", ")
+        : `${selectedItems.length} choices selected`;
+
+  return (
+    <Popover.Root>
+      <Popover.Trigger asChild>
+        <button
+          type="button"
+          aria-label={`${optionName}: ${summary}`}
+          className="flex min-h-12 w-full items-center justify-between gap-3 rounded-xl border border-[#d9cec8] bg-white px-4 text-left text-sm font-semibold text-[#514843] outline-none transition hover:border-[#c9aaa1] focus-visible:border-[#CD3625] focus-visible:ring-4 focus-visible:ring-[#CD3625]/10"
+        >
+          <span className={`min-w-0 truncate ${selectedItems.length === 0 ? "text-[#8c817b]" : ""}`}>
+            {summary}
+          </span>
+          <span className="flex shrink-0 items-center gap-2 text-xs text-[#8c817b]">
+            {selectedItems.length > 0 && (
+              <span className="rounded-full bg-[#fff0eb] px-2 py-0.5 font-bold text-[#a83221]">
+                {selectedItems.length}
+              </span>
+            )}
+            <ChevronDown size={16} aria-hidden="true" />
+          </span>
+        </button>
+      </Popover.Trigger>
+      <Popover.Portal>
+        <Popover.Content
+          align="start"
+          sideOffset={6}
+          collisionPadding={12}
+          className="z-50 w-[var(--radix-popover-trigger-width)] overflow-hidden rounded-xl border border-[#ded4cf] bg-white p-1.5 shadow-[0_18px_45px_rgba(55,35,27,0.18)]"
+        >
+          <div className="max-h-64 overflow-y-auto overscroll-contain">
+            {items.map((optionItem) => {
+              const isSelected = selected.includes(optionItem.id);
+              return (
+                <label
+                  key={optionItem.id}
+                  className={`flex min-h-11 cursor-pointer items-center gap-3 rounded-lg px-3 py-2 text-sm transition ${isSelected ? "bg-[#fff0eb] text-[#a83221]" : "text-[#5f5550] hover:bg-[#faf6f3]"}`}
+                >
+                  <input
+                    type="checkbox"
+                    className="sr-only"
+                    checked={isSelected}
+                    onChange={() => onToggle(optionItem.id)}
+                  />
+                  <span
+                    aria-hidden="true"
+                    className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border ${isSelected ? "border-[#CD3625] bg-[#CD3625] text-white" : "border-[#cfc3bd] bg-white"}`}
+                  >
+                    {isSelected && <Check size={14} strokeWidth={3} />}
+                  </span>
+                  <span className="min-w-0 flex-1 font-semibold">{optionItem.name}</span>
+                  {optionItem.price > 0 && (
+                    <span className="shrink-0 text-xs font-semibold text-[#8c817b]">
+                      +{optionItem.price.toFixed(2)} CHF
+                    </span>
+                  )}
+                </label>
+              );
+            })}
+          </div>
+        </Popover.Content>
+      </Popover.Portal>
+    </Popover.Root>
   );
 }

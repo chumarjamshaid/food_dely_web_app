@@ -10,14 +10,18 @@ import {
 } from "@/components/ui/select";
 import {
   useAddresses,
+  useAddressAutocomplete,
   useAuth,
   useCart,
   useCategories,
   useLogout,
+  useRestaurantDetail,
   useRestaurants,
 } from "@/lib/api";
 import {
   ArrowRight,
+  Check,
+  LoaderCircle,
   LogOut,
   MapPin,
   Search,
@@ -27,8 +31,9 @@ import {
   X,
 } from "lucide-react";
 import Link from "next/link";
+import { getTodayOpeningHours } from "@/lib/opening-hours";
 import { useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 
 function normalizeSearchText(value: string | null | undefined) {
   return (value ?? "")
@@ -52,37 +57,62 @@ function RestaurantListPage() {
   const [availability, setAvailability] = useState("all");
   const [highlight, setHighlight] = useState("all");
   const [deliveryType, setDeliveryType] = useState("delivery");
+  const [deliveryAddress, setDeliveryAddress] = useState("");
+  const [showClosed, setShowClosed] = useState(false);
+  const [changingLocation, setChangingLocation] = useState(false);
+  const [locationSearch, setLocationSearch] = useState("");
+  const [debouncedLocationSearch, setDebouncedLocationSearch] = useState("");
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    if (isAuthenticated && addresses?.length) {
-      const address = addresses.find((item) => item.default) ?? addresses[0];
-      sessionStorage.setItem(
-        "deliveryAddress",
-        `${address.address}, ${address.postal_code} ${address.city}`,
-      );
+    const timer = window.setTimeout(
+      () => setDebouncedLocationSearch(locationSearch),
+      300,
+    );
+    return () => window.clearTimeout(timer);
+  }, [locationSearch]);
+
+  const { data: locationSuggestions = [], isFetching: locationLoading } =
+    useAddressAutocomplete(changingLocation ? debouncedLocationSearch : "");
+
+  useEffect(() => {
+    const addressFromUrl = searchParams.get("address")?.trim();
+    if (addressFromUrl) {
+      setDeliveryAddress(addressFromUrl);
+      sessionStorage.setItem("deliveryAddress", addressFromUrl);
       return;
     }
 
-    const address = searchParams.get("address");
-    if (address) sessionStorage.setItem("deliveryAddress", address);
+    const storedAddress = sessionStorage.getItem("deliveryAddress")?.trim();
+    if (storedAddress) {
+      setDeliveryAddress(storedAddress);
+      return;
+    }
+
+    if (isAuthenticated && addresses?.length) {
+      const address = addresses.find((item) => item.default) ?? addresses[0];
+      const formattedAddress = `${address.address}, ${address.postal_code} ${address.city}`;
+      setDeliveryAddress(formattedAddress);
+      sessionStorage.setItem("deliveryAddress", formattedAddress);
+    }
   }, [addresses, isAuthenticated, searchParams]);
 
   const { data: restaurants = [], isLoading, error } = useRestaurants({
     category: category || undefined,
-    open: availability === "open" ? true : undefined,
+    open: showClosed ? undefined : true,
     delivery: availability === "delivery" ? true : undefined,
     reviews: highlight === "rating" ? 4 : undefined,
     nowaste: highlight === "nowaste" ? true : undefined,
+    address: deliveryAddress || undefined,
   });
 
   const searchTerms = normalizeSearchText(search).split(" ").filter(Boolean);
   const filteredRestaurants = restaurants.filter((restaurant) => {
     const searchableText = normalizeSearchText(
-      `${restaurant.name} ${restaurant.description ?? ""}`,
+      `${restaurant.name} ${restaurant.description ?? ""} ${(restaurant.categories ?? []).map((item) => `${item.name} ${item.description ?? ""}`).join(" ")}`,
     );
 
     if (searchTerms.some((term) => !searchableText.includes(term))) return false;
-    if (availability === "open" && !restaurant.open) return false;
     if (availability === "delivery" && !restaurant.delivery_available) return false;
     if (highlight === "rating" && Number(restaurant.rating ?? 0) < 4) return false;
     if (highlight === "free-delivery" && Number(restaurant.delivery_fee ?? 0) !== 0) return false;
@@ -95,9 +125,10 @@ function RestaurantListPage() {
     setCategory(null);
     setAvailability("all");
     setHighlight("all");
+    setShowClosed(false);
   };
 
-  const hasFilters = Boolean(search || category || availability !== "all" || highlight !== "all");
+  const hasFilters = Boolean(search || category || availability !== "all" || highlight !== "all" || showClosed);
 
   return (
     <div className="min-h-screen bg-[#fbfaf8] text-[#241f1c]">
@@ -154,32 +185,106 @@ function RestaurantListPage() {
           <p className="mx-auto mt-4 max-w-2xl text-base leading-7 text-[#70645e]">
             Browse local restaurants, then open a restaurant to explore its complete menu and customize your order.
           </p>
+          {deliveryAddress && (
+            <div className="mx-auto mt-5 flex w-fit max-w-full items-center gap-2 rounded-full border border-[#e5d7d0] bg-white px-4 py-2 text-sm font-bold text-[#5f534d] shadow-sm">
+              <MapPin size={16} className="shrink-0 text-[#c83b2b]" />
+              <span className="truncate">Delivering near {deliveryAddress}</span>
+              <button
+                type="button"
+                onClick={() => {
+                  setChangingLocation(true);
+                  setLocationSearch("");
+                  window.requestAnimationFrame(() => {
+                    searchInputRef.current?.focus();
+                    searchInputRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+                  });
+                }}
+                className="ml-1 shrink-0 text-[#b63825] hover:underline"
+              >
+                Change location
+              </button>
+            </div>
+          )}
         </section>
 
         <section className="mx-auto mt-9 max-w-5xl rounded-[24px] border border-[#eadfd9] bg-white p-4 shadow-[0_16px_45px_rgba(55,35,27,0.07)] sm:p-5">
-          <label className="flex min-h-14 items-center gap-3 rounded-2xl border border-[#ddd3ce] bg-[#fbfaf8] px-4 transition focus-within:border-[#c83b2b] focus-within:ring-4 focus-within:ring-[#c83b2b]/10">
-            <Search size={21} className="text-[#c83b2b]" />
-            <input
-              type="search"
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder="Search restaurants or cuisines"
-              className="min-w-0 flex-1 bg-transparent text-base outline-none placeholder:text-stone-400"
-            />
-            {search && <button type="button" onClick={() => setSearch("")} aria-label="Clear search" className="rounded-lg p-1 text-stone-400 hover:bg-white"><X size={17} /></button>}
-          </label>
+          <div className="relative">
+            <label className="flex min-h-14 items-center gap-3 rounded-2xl border border-[#ddd3ce] bg-[#fbfaf8] px-4 transition focus-within:border-[#c83b2b] focus-within:ring-4 focus-within:ring-[#c83b2b]/10">
+              {changingLocation ? <MapPin size={21} className="text-[#c83b2b]" /> : <Search size={21} className="text-[#c83b2b]" />}
+              <input
+                ref={searchInputRef}
+                type="search"
+                value={changingLocation ? locationSearch : search}
+                onChange={(event) => changingLocation ? setLocationSearch(event.target.value) : setSearch(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Escape" && changingLocation) {
+                    setChangingLocation(false);
+                    setLocationSearch("");
+                  }
+                }}
+                placeholder={changingLocation ? "Enter and select a new delivery address" : "Search restaurants or cuisines"}
+                autoComplete={changingLocation ? "street-address" : "off"}
+                className="min-w-0 flex-1 bg-transparent text-base outline-none placeholder:text-stone-400"
+              />
+              {changingLocation && locationLoading && <LoaderCircle size={18} className="animate-spin text-[#c83b2b]" />}
+              {(changingLocation || search) && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (changingLocation) {
+                      setChangingLocation(false);
+                      setLocationSearch("");
+                    } else {
+                      setSearch("");
+                    }
+                  }}
+                  aria-label={changingLocation ? "Cancel changing location" : "Clear search"}
+                  className="rounded-lg p-1 text-stone-400 hover:bg-white"
+                >
+                  <X size={17} />
+                </button>
+              )}
+            </label>
 
-          <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+            {changingLocation && debouncedLocationSearch.trim().length >= 3 && (
+              <div className="absolute inset-x-0 top-[calc(100%+8px)] z-40 overflow-hidden rounded-2xl border border-[#e4d9d3] bg-white p-2 shadow-2xl">
+                {locationSuggestions.length > 0 ? locationSuggestions.map((suggestion) => (
+                  <button
+                    key={suggestion.place_id}
+                    type="button"
+                    onClick={() => {
+                      setDeliveryAddress(suggestion.description);
+                      sessionStorage.setItem("deliveryAddress", suggestion.description);
+                      const url = new URL(window.location.href);
+                      url.searchParams.set("address", suggestion.description);
+                      window.history.replaceState(null, "", url.toString());
+                      setChangingLocation(false);
+                      setLocationSearch("");
+                      setSearch("");
+                    }}
+                    className="flex w-full items-start gap-3 rounded-xl px-3 py-3 text-left text-sm transition hover:bg-[#fff1ed]"
+                  >
+                    <MapPin size={17} className="mt-0.5 shrink-0 text-[#c83b2b]" />
+                    <span className="flex-1 leading-5">{suggestion.description}</span>
+                    {deliveryAddress === suggestion.description && <Check size={16} className="mt-0.5 text-emerald-600" />}
+                  </button>
+                )) : !locationLoading ? (
+                  <p className="px-3 py-4 text-sm text-stone-500">No matching addresses found.</p>
+                ) : null}
+              </div>
+            )}
+          </div>
+
+          <div className="mt-4 flex flex-wrap items-center gap-2">
             <Select value={availability} onValueChange={setAvailability}>
-              <SelectTrigger className="h-11 w-[160px] rounded-xl"><SelectValue /></SelectTrigger>
+              <SelectTrigger className="w-[160px] rounded-xl data-[size=default]:h-11"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All restaurants</SelectItem>
-                <SelectItem value="open">Open now</SelectItem>
                 <SelectItem value="delivery">Offers delivery</SelectItem>
               </SelectContent>
             </Select>
             <Select value={highlight} onValueChange={setHighlight}>
-              <SelectTrigger className="h-11 w-[160px] rounded-xl"><SelectValue /></SelectTrigger>
+              <SelectTrigger className="w-[160px] rounded-xl data-[size=default]:h-11"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All highlights</SelectItem>
                 <SelectItem value="rating">Highly rated</SelectItem>
@@ -188,6 +293,15 @@ function RestaurantListPage() {
               </SelectContent>
             </Select>
             {hasFilters && <button type="button" onClick={clearFilters} className="h-11 rounded-xl px-4 text-sm font-bold text-[#b63825] hover:bg-[#fff1ed]">Clear filters</button>}
+            <label className="ml-auto flex h-11 cursor-pointer items-center gap-2 rounded-xl border border-[#ded3cd] bg-white px-4 text-sm font-bold text-[#665b55] transition hover:border-[#c83b2b]">
+              <input
+                type="checkbox"
+                checked={showClosed}
+                onChange={(event) => setShowClosed(event.target.checked)}
+                className="h-4 w-4 accent-[#c83b2b]"
+              />
+              Display closed restaurants
+            </label>
           </div>
         </section>
 
@@ -229,8 +343,8 @@ function RestaurantListPage() {
                   aria-label={`View ${restaurant.name} restaurant and menu`}
                   className="group overflow-hidden rounded-[24px] border border-[#e8ddd7] bg-white shadow-[0_12px_35px_rgba(55,35,27,0.06)] transition duration-500 hover:-translate-y-2 hover:border-[#dca99d] hover:shadow-[0_25px_60px_rgba(75,42,30,0.15)] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#c83b2b]/25"
                 >
-                  <div className="relative aspect-[16/10] overflow-hidden bg-[#fff8f5]">
-                    <SafeImage src={image} alt={restaurant.name} fill className="object-cover transition duration-700 group-hover:scale-105" fallbackClassName="object-contain bg-[#fff8f5] p-12" />
+                  <div className="relative aspect-[16/10] isolate overflow-hidden bg-[#f4eeeb]">
+                    <SafeImage src={image} alt={restaurant.name} fill sizes="(min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw" className="object-cover transition duration-700 group-hover:scale-105" fallbackClassName="object-contain bg-[#fff8f5] p-12" />
                     <div className="absolute inset-0 bg-gradient-to-t from-black/45 via-transparent to-transparent" />
                     <span className={`absolute left-4 top-4 rounded-full px-3 py-1.5 text-xs font-black shadow-sm backdrop-blur ${restaurant.open ? "bg-emerald-500 text-white" : "bg-white/90 text-stone-700"}`}>
                       {restaurant.open ? "Open now" : "Closed"}
@@ -250,6 +364,7 @@ function RestaurantListPage() {
                       <span className="text-stone-500">Min. {Number(restaurant.min_amount ?? 0).toFixed(2)} CHF</span>
                       <span className="ml-auto flex items-center gap-1 font-bold text-[#b63825]"><MapPin size={14} /> View menu</span>
                     </div>
+                    {!restaurant.open && <ClosedRestaurantHours restaurantId={restaurant.id} />}
                   </div>
                 </Link>
               );
@@ -258,6 +373,20 @@ function RestaurantListPage() {
         )}
       </main>
     </div>
+  );
+}
+
+function ClosedRestaurantHours({ restaurantId }: { restaurantId: number }) {
+  // The list endpoint does not currently include schedules, while the detail
+  // endpoint does. React Query caches this for the subsequent detail visit.
+  const { data, isLoading } = useRestaurantDetail(restaurantId);
+  const todayHours = getTodayOpeningHours(data?.openings);
+
+  return (
+    <p className="mt-3 flex min-h-4 items-center gap-1.5 text-xs font-bold text-[#756963]">
+      <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#c83b2b]" />
+      {isLoading ? "Checking today’s hours…" : todayHours ?? "Hours unavailable"}
+    </p>
   );
 }
 

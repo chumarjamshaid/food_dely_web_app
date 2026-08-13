@@ -33,6 +33,7 @@ export interface RestaurantListItem {
   open: boolean;
   categories: RestaurantCategoryItem[];
   images: RestaurantImage[];
+  openings?: { day: string; start: string; end: string }[];
 }
 
 export interface MenuFoodCategory {
@@ -69,6 +70,7 @@ export interface RestaurantDetailResponse {
   active?: boolean;
   open?: boolean;
   images?: RestaurantImage[];
+  openings?: { day: string; start: string; end: string }[];
   categories: RestaurantCategoryResponse[];
   foods: MenuFoodCategory[];
   nowaste_items: NoWasteItem[];
@@ -100,6 +102,9 @@ export interface MenuItemResponse {
   image: string | null;
   options: MenuItemOptionGroupResponse[];
   allergies: (string | AllergyResponse)[];
+  restaurant_id?: number;
+  restaurant_name?: string;
+  restaurant?: { id: number; name: string };
 }
 
 export interface MenuItemOptionGroupResponse {
@@ -204,6 +209,9 @@ export interface CartResponse {
   tip_amount: string | number;
   total: string | number;
   currency: string;
+  restaurant_id?: number;
+  restaurant_name?: string;
+  restaurant?: { id: number; name: string };
   /** Compatibility with responses from older deployments. */
   total_price?: string;
 }
@@ -212,6 +220,8 @@ export interface CartItemResponse {
   id: number;
   /** Restaurant ID this item belongs to (when returned by API). Used to enforce single-restaurant cart. */
   restaurant_id?: number;
+  restaurant_name?: string;
+  restaurant?: { id: number; name: string };
   menu_item?: MenuItemResponse;
   nowaste_item?: {
     id: number;
@@ -219,6 +229,9 @@ export interface CartItemResponse {
     description: string;
     price: number;
     image: string | null;
+    restaurant_id?: number;
+    restaurant_name?: string;
+    restaurant?: { id: number; name: string };
   };
   quantity: number;
   options?: CartItemOptionResponse[];
@@ -285,10 +298,16 @@ export interface OrderItem {
     description: string;
     price: number;
     image: string | null;
+    restaurant_id?: number;
+    restaurant_name?: string;
+    restaurant?: { id: number; name: string };
   };
   quantity: number;
   options?: CartItemOptionResponse[];
   price: number;
+  restaurant_id?: number;
+  restaurant_name?: string;
+  restaurant?: { id: number; name: string };
 }
 
 export interface OrderListItem {
@@ -298,6 +317,9 @@ export interface OrderListItem {
   placed: string;
   created_at?: string;
   items: OrderItem[];
+  restaurant_id?: number;
+  restaurant_name?: string;
+  restaurant?: { id: number; name: string };
 }
 
 export interface OrderDetailResponse extends OrderListItem {

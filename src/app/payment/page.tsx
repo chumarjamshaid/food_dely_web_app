@@ -6,10 +6,12 @@ import {
   useClearCart,
   useConfirmPayment,
   useCreatePaymentIntent,
+  useRestaurantDetail,
   useValidateCart,
 } from "@/lib/api";
 import SafeImage from "@/components/SafeImage";
 import { getCartTotal } from "@/lib/cart-total";
+import { getCartRestaurantId, getCartRestaurantName } from "@/lib/cart-restaurant";
 import { extractApiError } from "@/lib/api/error";
 import "@fontsource/abril-fatface";
 import "@fontsource/playfair-display/700.css";
@@ -182,6 +184,9 @@ function PaymentPageContent() {
   const [clientSecret, setClientSecret] = useState<string | null>(null);
   const createPaymentIntent = useCreatePaymentIntent();
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
+  const cartRestaurantId = getCartRestaurantId(apiCart);
+  const { data: cartRestaurant } = useRestaurantDetail(cartRestaurantId ?? 0);
+  const restaurantName = getCartRestaurantName(apiCart) || cartRestaurant?.name || "Restaurant";
 
   // Sync cart items from API when available
   useEffect(() => {
@@ -584,6 +589,11 @@ function PaymentPageContent() {
           <p className="mt-2 text-sm leading-6 text-[#7d716a]">
             Confirm your details, choose delivery or pickup, and pay securely.
           </p>
+          {hasCartItems && (
+            <p className="mt-3 text-sm font-black text-[#b63825]">
+              Restaurant: {restaurantName}
+            </p>
+          )}
         </div>
 
         {/* Tabs */}
@@ -1184,6 +1194,7 @@ function PaymentPageContent() {
                   <h2 className="mt-1 text-xl font-black text-white">
                     Order summary
                   </h2>
+                  <p className="mt-1 text-sm font-bold text-stone-300">{restaurantName}</p>
                 </div>
                 <Link href="/cart" className="text-sm font-bold text-[#ff9b8f] hover:underline">
                   Edit cart

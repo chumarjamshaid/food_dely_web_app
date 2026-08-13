@@ -1,11 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  AUTH_CHANGE_EVENT,
   apiClient,
   clearAuthToken,
   hasAuthToken,
   setAuthRole,
   setAuthTokens,
 } from "../client";
+import { useSyncExternalStore } from "react";
 import { clearSessionId, getOrCreateSessionId } from "../session";
 import type {
   CustomerProfile,
@@ -244,8 +246,20 @@ export function useLogout() {
  * Hook to check if user is authenticated
  */
 export function useAuth() {
-  const { data: profile, isLoading } = useCustomerProfile(hasAuthToken());
-  const isAuthenticated = !!profile && hasAuthToken();
+  const tokenPresent = useSyncExternalStore(
+    (onStoreChange) => {
+      window.addEventListener(AUTH_CHANGE_EVENT, onStoreChange);
+      window.addEventListener("storage", onStoreChange);
+      return () => {
+        window.removeEventListener(AUTH_CHANGE_EVENT, onStoreChange);
+        window.removeEventListener("storage", onStoreChange);
+      };
+    },
+    hasAuthToken,
+    () => false,
+  );
+  const { data: profile, isLoading } = useCustomerProfile(tokenPresent);
+  const isAuthenticated = !!profile && tokenPresent;
 
   return {
     isAuthenticated,

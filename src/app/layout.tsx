@@ -1,4 +1,7 @@
 import { QueryProvider } from '@/lib/api/query-provider'
+import { LanguageProvider } from '@/components/LanguageProvider'
+import GlobalLanguageSwitch from '@/components/GlobalLanguageSwitch'
+import AppTranslator from '@/components/AppTranslator'
 import { type Metadata } from 'next'
 // import { Geist, Geist_Mono } from 'next/font/google'
 import './globals.css'
@@ -32,7 +35,11 @@ export default function RootLayout({
     <html lang="en">
       <body className="antialiased font-sans">
         <QueryProvider>
-          {children}
+          <LanguageProvider>
+            <AppTranslator />
+            <GlobalLanguageSwitch />
+            {children}
+          </LanguageProvider>
         </QueryProvider>
       </body>
     </html>

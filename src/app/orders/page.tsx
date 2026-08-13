@@ -5,8 +5,10 @@ import {
   useCancelOrder,
   useLogout,
   useOrders,
+  useRestaurantDetail,
 } from "@/lib/api";
 import type { OrderListItem } from "@/lib/api/types";
+import { getOrderRestaurantId, getOrderRestaurantName } from "@/lib/order-restaurant";
 import SafeImage from "@/components/SafeImage";
 import { ArrowLeft, PackageCheck, RotateCcw } from "lucide-react";
 import Link from "next/link";
@@ -161,25 +163,14 @@ function OrdersPageContent() {
     return raw;
   };
 
-  // Show loading spinner while checking auth
-  if (authLoading) {
+  // Keep the server and first client render identical while authentication is
+  // restored; the redirect effect handles signed-out customers afterward.
+  if (authLoading || !isAuthenticated) {
     return (
       <div className="min-h-screen bg-white flex items-center justify-center">
         <div className="text-center">
           <div className="inline-block w-12 h-12 border-4 border-[#CD3625] border-t-transparent rounded-full animate-spin"></div>
           <p className="text-gray-500 text-lg mt-4">Loading...</p>
-        </div>
-      </div>
-    );
-  }
-
-  // Show nothing while redirecting (auth check in useEffect will handle redirect)
-  if (!isAuthenticated) {
-    return (
-      <div className="min-h-screen bg-white flex items-center justify-center">
-        <div className="text-center">
-          <div className="inline-block w-12 h-12 border-4 border-[#CD3625] border-t-transparent rounded-full animate-spin"></div>
-          <p className="text-gray-500 text-lg mt-4">Redirecting to sign in...</p>
         </div>
       </div>
     );
@@ -277,6 +268,9 @@ function OrdersPageContent() {
                       </div>
                       <p className="text-gray-600 text-sm">
                         Placed on {getOrderDateLabel(order)}
+                      </p>
+                      <p className="mt-1 text-sm font-bold text-[#b63825]">
+                        <OrderRestaurantName order={order} />
                       </p>
                       <p className="text-lg font-semibold text-black mt-2">
                         Total: {Number(order.price).toFixed(2)} CHF
@@ -407,6 +401,16 @@ function OrdersPageContent() {
       </main>
     </div>
   );
+}
+
+function OrderRestaurantName({ order }: { order: OrderListItem }) {
+  const embeddedName = getOrderRestaurantName(order);
+  const restaurantId = getOrderRestaurantId(order);
+  const { data: restaurant, isLoading } = useRestaurantDetail(restaurantId ?? 0);
+
+  if (embeddedName !== "Restaurant name unavailable") return <>{embeddedName}</>;
+  if (restaurant?.name) return <>{restaurant.name}</>;
+  return <>{isLoading ? "Loading restaurant…" : "Restaurant"}</>;
 }
 
 export default function OrdersPage() {

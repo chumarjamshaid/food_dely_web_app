@@ -1,6 +1,14 @@
 import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios';
 import { clearSessionId, getSessionId, isAuthenticated } from './session';
 
+export const AUTH_CHANGE_EVENT = 'fooddely-auth-change';
+
+const notifyAuthChange = () => {
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new Event(AUTH_CHANGE_EVENT));
+  }
+};
+
 // Base URL for the API - update this to match your backend
 export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://backend.fooddely.com';
 
@@ -67,6 +75,7 @@ apiClient.interceptors.response.use(
 export const setAuthToken = (token: string) => {
   if (typeof window !== 'undefined') {
     localStorage.setItem('auth_token', token);
+    notifyAuthChange();
   }
 };
 
@@ -89,6 +98,7 @@ export const clearAuthToken = () => {
     localStorage.removeItem('auth_role');
     // Also clear session_id when logging out
     clearSessionId();
+    notifyAuthChange();
   }
 };
 

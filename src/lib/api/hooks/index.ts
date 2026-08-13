@@ -9,6 +9,10 @@ export {
 // Category hooks
 export { categoryKeys, useCategories } from "./use-categories";
 
+// Public location autocomplete
+export { locationKeys, useAddressAutocomplete } from "./use-locations";
+export type { AddressSuggestion } from "./use-locations";
+
 // Customer hooks
 export {
   customerKeys,

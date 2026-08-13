@@ -1,6 +1,7 @@
 import type { CartResponse } from "@/lib/api/types";
 
 const STORAGE_KEY = "cart_restaurant_id";
+const STORAGE_NAME_KEY = "cart_restaurant_name";
 
 /**
  * Returns the restaurant ID that the current cart is for.
@@ -9,7 +10,14 @@ const STORAGE_KEY = "cart_restaurant_id";
  */
 export function getCartRestaurantId(cart: CartResponse | null | undefined): number | null {
   if (!cart?.items?.length) return null;
-  const fromApi = cart.items.find((item) => item.restaurant_id != null)?.restaurant_id;
+  const fromCart = cart.restaurant_id ?? cart.restaurant?.id;
+  if (fromCart != null) return fromCart;
+  const fromApi = cart.items.find((item) => item.restaurant_id != null)?.restaurant_id
+    ?? cart.items.find((item) => item.restaurant?.id)?.restaurant?.id
+    ?? cart.items.find((item) => item.menu_item?.restaurant_id)?.menu_item?.restaurant_id
+    ?? cart.items.find((item) => item.menu_item?.restaurant?.id)?.menu_item?.restaurant?.id
+    ?? cart.items.find((item) => item.nowaste_item?.restaurant_id)?.nowaste_item?.restaurant_id
+    ?? cart.items.find((item) => item.nowaste_item?.restaurant?.id)?.nowaste_item?.restaurant?.id;
   if (fromApi != null) return fromApi;
   if (typeof globalThis.window === "undefined") return null;
   const stored = globalThis.sessionStorage.getItem(STORAGE_KEY);
@@ -20,14 +28,33 @@ export function getCartRestaurantId(cart: CartResponse | null | undefined): numb
   return null;
 }
 
-export function setCartRestaurantId(restaurantId: number): void {
+export function getCartRestaurantName(cart: CartResponse | null | undefined): string | null {
+  if (!cart?.items?.length) return null;
+  const fromApi = cart.restaurant_name
+    ?? cart.restaurant?.name
+    ?? cart.items.find((item) => item.restaurant_name)?.restaurant_name
+    ?? cart.items.find((item) => item.restaurant?.name)?.restaurant?.name
+    ?? cart.items.find((item) => item.menu_item?.restaurant_name)?.menu_item?.restaurant_name
+    ?? cart.items.find((item) => item.menu_item?.restaurant?.name)?.menu_item?.restaurant?.name
+    ?? cart.items.find((item) => item.nowaste_item?.restaurant_name)?.nowaste_item?.restaurant_name
+    ?? cart.items.find((item) => item.nowaste_item?.restaurant?.name)?.nowaste_item?.restaurant?.name;
+  if (fromApi?.trim()) return fromApi.trim();
+  if (typeof globalThis.window === "undefined") return null;
+  return globalThis.sessionStorage.getItem(STORAGE_NAME_KEY)?.trim() || null;
+}
+
+export function setCartRestaurantId(restaurantId: number, restaurantName?: string): void {
   if (typeof globalThis.window !== "undefined") {
     globalThis.sessionStorage.setItem(STORAGE_KEY, String(restaurantId));
+    if (restaurantName?.trim()) {
+      globalThis.sessionStorage.setItem(STORAGE_NAME_KEY, restaurantName.trim());
+    }
   }
 }
 
 export function clearCartRestaurantId(): void {
   if (typeof globalThis.window !== "undefined") {
     globalThis.sessionStorage.removeItem(STORAGE_KEY);
+    globalThis.sessionStorage.removeItem(STORAGE_NAME_KEY);
   }
 }

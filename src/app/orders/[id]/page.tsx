@@ -5,9 +5,11 @@ import {
   useCart,
   useOrderDetail,
   useOrderStatus,
+  useRestaurantDetail,
 } from "@/lib/api";
 import SafeImage from "@/components/SafeImage";
 import type { OrderStatus } from "@/lib/api/types";
+import { getOrderRestaurantId, getOrderRestaurantName } from "@/lib/order-restaurant";
 import { ArrowLeft, Bike, Check, ChefHat, Clock3, MapPin, PackageCheck, PartyPopper, ShoppingBag, XCircle } from "lucide-react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
@@ -67,6 +69,12 @@ export default function OrderDetailPage() {
   const experience = statusExperience[currentStatus] || statusExperience.placed;
   const StatusIcon = experience.icon;
   const orderTotal = Number(order?.total ?? order?.price ?? 0);
+  const embeddedRestaurantName = order ? getOrderRestaurantName(order) : "";
+  const restaurantId = order ? getOrderRestaurantId(order) : null;
+  const { data: orderRestaurant } = useRestaurantDetail(restaurantId ?? 0);
+  const restaurantName = embeddedRestaurantName === "Restaurant name unavailable"
+    ? orderRestaurant?.name ?? "Restaurant"
+    : embeddedRestaurantName;
   const delivery = order?.delivery ?? (order?.delivery_firstname ? {
     firstname: order.delivery_firstname, lastname: order.delivery_lastname ?? "", address: order.delivery_address ?? "",
     postal_code: order.delivery_postal_code ?? "", city: order.delivery_city ?? "", phone: order.delivery_phone, email: order.delivery_email,
@@ -191,6 +199,7 @@ export default function OrderDetailPage() {
                       <div className="shrink-0 rounded-2xl border border-white/20 bg-black/15 px-4 py-3 backdrop-blur">
                         <p className="text-[10px] font-black uppercase tracking-[0.16em] text-white/60">Order number</p>
                         <p className="mt-1 text-xl font-black">#{order.id}</p>
+                        <p className="mt-1 max-w-48 text-sm font-bold text-white/85">{restaurantName}</p>
                       </div>
                     </div>
                   </div>
@@ -206,6 +215,7 @@ export default function OrderDetailPage() {
                           minute: "2-digit",
                         }) : "Recently")}
                       </p>
+                      <p className="text-sm font-black text-[#b63825]">{restaurantName}</p>
                       <span className={`w-fit rounded-full px-4 py-2 text-sm font-black ${statusStyle.bg} ${statusStyle.text}`}>{statusLabels[currentStatus]}</span>
                     </div>
 

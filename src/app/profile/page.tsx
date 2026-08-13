@@ -2,6 +2,8 @@
 import { useAddresses, useCustomerProfile, useOrders } from "@/lib/api";
 import "@fontsource/abril-fatface";
 import Link from "next/link";
+import { getOrderRestaurantName } from "@/lib/order-restaurant";
+import { ArrowLeft } from "lucide-react";
 
 export default function ProfilePage() {
   // const router = useRouter();
@@ -39,6 +41,13 @@ export default function ProfilePage() {
       <div className="max-w-4xl mx-auto px-4 py-8">
         {/* Header */}
         <div className="mb-8">
+          <Link
+            href="/partners"
+            className="mb-5 inline-flex min-h-10 items-center gap-2 rounded-xl border border-gray-700 px-3 text-sm font-semibold text-gray-200 transition hover:border-gray-500 hover:bg-white/10"
+          >
+            <ArrowLeft size={18} />
+            Back to restaurants
+          </Link>
           <div
             className="text-[32px] font-extrabold mb-2"
             style={{ fontFamily: "Abril Fatface, serif" }}
@@ -136,7 +145,7 @@ export default function ProfilePage() {
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-xl font-semibold">Order History</h2>
             <Link
-              href="/order-list"
+              href="/orders"
               className="text-red-400 hover:text-red-300 text-sm font-medium"
             >
               View All
@@ -146,15 +155,18 @@ export default function ProfilePage() {
             <div className="text-gray-400">Loading orders...</div>
           ) : orders && orders.length > 0 ? (
             <div className="space-y-3">
-              {orders.slice(0, 5).map((order) => (
+              {orders.slice(0, 3).map((order) => (
                 <Link
                   key={order.id}
-                  href={`/order-list?id=${order.id}`}
+                  href={`/orders/${order.id}`}
                   className="block p-4 bg-black bg-opacity-20 rounded-lg border border-gray-700 hover:border-red-500 transition"
                 >
                   <div className="flex justify-between items-start">
                     <div>
                       <div className="text-white font-medium">Order #{order.id}</div>
+                      <div className="text-red-400 text-sm font-medium">
+                        {getOrderRestaurantName(order)}
+                      </div>
                       <div className="text-gray-400 text-sm">
                         {order.placed || (order.created_at ? new Date(order.created_at).toLocaleDateString() : "Recently")}
                       </div>

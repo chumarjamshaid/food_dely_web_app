@@ -116,11 +116,14 @@ async function removeFromCart(cartItemId: number): Promise<CartResponse> {
 
 async function updateCartItem(
   cartItem: CartItemResponse,
-  quantity: number,
+  update: {
+    quantity?: number;
+    options?: { option: number; item: number }[];
+  },
 ): Promise<CartResponse> {
-  if (quantity <= 0) return removeFromCart(cartItem.id);
+  if (update.quantity != null && update.quantity <= 0) return removeFromCart(cartItem.id);
   const formData = new FormData();
-  formData.append("data", JSON.stringify({ quantity }));
+  formData.append("data", JSON.stringify(update));
   const sessionId = !isAuthenticated() ? getOrCreateSessionId() : null;
   const response = await apiClient.patch<CartResponse>(`/api/app/cart/items/${cartItem.id}/`, formData, {
     params: sessionId ? { session_id: sessionId } : undefined,
@@ -198,10 +201,12 @@ export function useUpdateCartItem() {
     mutationFn: ({
       cartItem,
       quantity,
+      options,
     }: {
       cartItem: CartItemResponse;
-      quantity: number;
-    }) => updateCartItem(cartItem, quantity),
+      quantity?: number;
+      options?: { option: number; item: number }[];
+    }) => updateCartItem(cartItem, { quantity, options }),
     onSuccess: (data) => {
       // Update cart cache with new data
       queryClient.setQueryData(cartKeys.current(), data);

@@ -21,6 +21,17 @@ function normalizeOrder<T extends { status: string }>(order: T): T {
   return { ...order, status: normalizeOrderStatus(order.status) };
 }
 
+function orderTimestamp(order: OrderListItem): number {
+  const raw = order.placed || order.created_at || "";
+  const apiDate = /^(\d{2})-(\d{2})-(\d{4})(?:\s+(\d{1,2}):(\d{2}))?/.exec(raw);
+  if (apiDate) {
+    const [, day, month, year, hour = "0", minute = "0"] = apiDate;
+    return new Date(Number(year), Number(month) - 1, Number(day), Number(hour), Number(minute)).getTime();
+  }
+  const timestamp = Date.parse(raw);
+  return Number.isNaN(timestamp) ? order.id : timestamp;
+}
+
 // Query keys for orders
 export const orderKeys = {
   all: ["orders"] as const,
@@ -38,7 +49,9 @@ async function fetchOrders(): Promise<OrderListItem[]> {
 
   try {
     const response = await apiClient.get<OrderListItem[]>("/api/app/orders/", { params });
-    return response.data.map(normalizeOrder);
+    return response.data
+      .map(normalizeOrder)
+      .sort((a, b) => orderTimestamp(b) - orderTimestamp(a));
   } catch (error) {
     const status = (error as { response?: { status?: number } }).response?.status;
     if (status === 404) return [];
@@ -54,7 +67,7 @@ function guestParams() {
 // Fetch single order detail
 async function fetchOrderDetail(id: number): Promise<OrderDetailResponse> {
   const response = await apiClient.get<OrderDetailResponse>(
-    `/api/app/orders/${id}/`, { params: guestParams() }
+    `/api/app/orders/${id}/`, { params: guestParams(), timeout: 15_000 }
   );
   return normalizeOrder(response.data);
 }
@@ -155,10 +168,16 @@ export function useOrders() {
  * @param id - Order ID
  */
 export function useOrderDetail(id: number) {
+  const queryClient = useQueryClient();
   return useQuery({
     queryKey: orderKeys.detail(id),
     queryFn: () => fetchOrderDetail(id),
     enabled: !!id,
+    initialData: () =>
+      queryClient
+        .getQueryData<OrderListItem[]>(orderKeys.lists())
+        ?.find((order) => order.id === id) as OrderDetailResponse | undefined,
+    initialDataUpdatedAt: 0,
     refetchInterval: (query) => {
       const status = query.state.data?.status;
       return status === "placed" || status === "preparing" || status === "ready" || status === "delivering" ? 30_000 : false;
@@ -166,7 +185,7 @@ export function useOrderDetail(id: number) {
     retry: (failureCount, error) => {
       // @ts-expect-error - axios error has response
       if (error?.response?.status === 404) return false;
-      return failureCount < 3;
+      return failureCount < 1;
     },
   });
 }
