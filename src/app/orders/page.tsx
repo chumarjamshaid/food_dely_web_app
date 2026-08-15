@@ -5,10 +5,11 @@ import {
   useCancelOrder,
   useLogout,
   useOrders,
+  useRestaurantCatalog,
   useRestaurantDetail,
 } from "@/lib/api";
 import type { OrderListItem } from "@/lib/api/types";
-import { getOrderRestaurantId, getOrderRestaurantName } from "@/lib/order-restaurant";
+import { getOrderRestaurantId, getOrderRestaurantName, getOrderRestaurantNameFromCatalog } from "@/lib/order-restaurant";
 import SafeImage from "@/components/SafeImage";
 import { ArrowLeft, PackageCheck, RotateCcw } from "lucide-react";
 import Link from "next/link";
@@ -20,6 +21,7 @@ function OrdersPageContent() {
   const { isAuthenticated, user, isLoading: authLoading } = useAuth();
   const logout = useLogout();
   const { data: orders, isLoading: ordersLoading, error } = useOrders();
+  const { data: restaurantCatalog } = useRestaurantCatalog();
   const cancelOrderMutation = useCancelOrder();
   const addToCartMutation = useAddToCart();
 
@@ -270,7 +272,7 @@ function OrdersPageContent() {
                         Placed on {getOrderDateLabel(order)}
                       </p>
                       <p className="mt-1 text-sm font-bold text-[#b63825]">
-                        <OrderRestaurantName order={order} />
+                        <OrderRestaurantName order={order} restaurantCatalog={restaurantCatalog} />
                       </p>
                       <p className="text-lg font-semibold text-black mt-2">
                         Total: {Number(order.price).toFixed(2)} CHF
@@ -403,13 +405,21 @@ function OrdersPageContent() {
   );
 }
 
-function OrderRestaurantName({ order }: { order: OrderListItem }) {
+function OrderRestaurantName({
+  order,
+  restaurantCatalog,
+}: {
+  order: OrderListItem;
+  restaurantCatalog: import("@/lib/api/types").RestaurantDetailResponse[] | undefined;
+}) {
   const embeddedName = getOrderRestaurantName(order);
   const restaurantId = getOrderRestaurantId(order);
   const { data: restaurant, isLoading } = useRestaurantDetail(restaurantId ?? 0);
 
   if (embeddedName !== "Restaurant name unavailable") return <>{embeddedName}</>;
   if (restaurant?.name) return <>{restaurant.name}</>;
+  const catalogName = getOrderRestaurantNameFromCatalog(order, restaurantCatalog);
+  if (catalogName) return <>{catalogName}</>;
   return <>{isLoading ? "Loading restaurant…" : "Restaurant"}</>;
 }
 

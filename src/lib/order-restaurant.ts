@@ -1,4 +1,4 @@
-import type { OrderListItem } from "@/lib/api/types";
+import type { OrderListItem, RestaurantDetailResponse } from "@/lib/api/types";
 
 export function getOrderRestaurantName(order: OrderListItem): string {
   const restaurant = order.restaurant as { name?: string } | string | undefined;
@@ -51,4 +51,25 @@ export function getOrderRestaurantId(order: OrderListItem): number | null {
   }
 
   return null;
+}
+
+export function getOrderRestaurantNameFromCatalog(
+  order: OrderListItem,
+  restaurants: RestaurantDetailResponse[] | undefined,
+): string | null {
+  if (!restaurants?.length) return null;
+
+  const menuItemIds = new Set(
+    order.items.flatMap((item) => item.menu_item?.id != null ? [item.menu_item.id] : []),
+  );
+  const noWasteItemIds = new Set(
+    order.items.flatMap((item) => item.nowaste_item?.id != null ? [item.nowaste_item.id] : []),
+  );
+
+  const match = restaurants.find((restaurant) =>
+    restaurant.foods.some((food) =>
+      food.menu_items.some((item) => menuItemIds.has(item.id)),
+    ) || restaurant.nowaste_items.some((item) => noWasteItemIds.has(item.id)),
+  );
+  return match?.name?.trim() || null;
 }

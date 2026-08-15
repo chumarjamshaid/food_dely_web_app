@@ -54,6 +54,21 @@ export function useRestaurants(params?: RestaurantQueryParams) {
 }
 
 /**
+ * Complete restaurant/menu catalog used to resolve legacy cart and order
+ * payloads that contain product IDs but omit their restaurant relationship.
+ */
+export function useRestaurantCatalog() {
+  return useQuery({
+    queryKey: [...restaurantKeys.all, "catalog"] as const,
+    queryFn: async () => {
+      const restaurants = await fetchRestaurants();
+      return Promise.all(restaurants.map((restaurant) => fetchRestaurantDetail(restaurant.id)));
+    },
+    staleTime: 5 * 60_000,
+  });
+}
+
+/**
  * Hook to fetch a single restaurant's details
  * @param id - Restaurant ID
  */

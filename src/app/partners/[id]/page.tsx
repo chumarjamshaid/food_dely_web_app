@@ -276,7 +276,9 @@ export default function PartnerDetailPage({ params }: { params: Promise<{ id: st
   // Calculate totals from API cart
   const cartItems = apiCart?.items || [];
   const subtotal = getCartTotal(apiCart);
-  const cartRestaurantName = getCartRestaurantName(apiCart) || "another restaurant";
+  const cartRestaurantId = getCartRestaurantId(apiCart);
+  const { data: cartRestaurant } = useRestaurantDetail(cartRestaurantId ?? 0);
+  const cartRestaurantName = getCartRestaurantName(apiCart) || cartRestaurant?.name || "another restaurant";
   const todayHours = getTodayOpeningHours(restaurant?.openings);
 
   // Show loading state
@@ -314,11 +316,8 @@ export default function PartnerDetailPage({ params }: { params: Promise<{ id: st
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4">
           <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6">
             <h3 className="text-lg font-semibold text-gray-900 mb-2">Different restaurant</h3>
-            <p className="text-gray-600 mb-3">
-              Your cart contains items from <strong className="text-gray-900">{cartRestaurantName}</strong>.
-            </p>
             <p className="text-gray-600 mb-6">
-              Empty your cart before adding items from {restaurant.name}.
+              You already have items from <strong className="text-gray-900">{cartRestaurantName}</strong> in your cart, so you cannot add items from this restaurant without emptying it first.
             </p>
             <div className="flex flex-wrap justify-end gap-3">
               <Link
@@ -472,7 +471,7 @@ export default function PartnerDetailPage({ params }: { params: Promise<{ id: st
                   </span>
                 </span>
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-xs font-bold text-[#786c66]">Your cart · {restaurant.name}</p>
+                  <p className="truncate text-xs font-bold text-[#786c66]">Your cart · {cartRestaurantName}</p>
                   <p className="mt-0.5 text-base font-black text-[#241f1c]">{subtotal.toFixed(2)} CHF</p>
                 </div>
                 <Link
@@ -794,7 +793,7 @@ export default function PartnerDetailPage({ params }: { params: Promise<{ id: st
                         Your cart
                       </div>
                       <div className="mt-0.5 truncate text-lg font-black leading-tight text-[#241f1c]">
-                        {restaurant.name}
+                        {cartItems.length > 0 ? cartRestaurantName : restaurant.name}
                       </div>
                     </div>
                     {cartItems.length > 0 && (

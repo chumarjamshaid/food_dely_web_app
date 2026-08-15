@@ -2,6 +2,7 @@
 export {
   restaurantKeys,
   useRegisterRestaurant,
+  useRestaurantCatalog,
   useRestaurantDetail,
   useRestaurants,
 } from "./use-restaurants";

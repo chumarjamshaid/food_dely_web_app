@@ -1,8 +1,9 @@
 "use client";
-import { useAddresses, useCustomerProfile, useOrders } from "@/lib/api";
+import { useAddresses, useCustomerProfile, useOrderDetail, useOrders, useRestaurantCatalog } from "@/lib/api";
+import type { OrderListItem, RestaurantDetailResponse } from "@/lib/api/types";
 import "@fontsource/abril-fatface";
 import Link from "next/link";
-import { getOrderRestaurantName } from "@/lib/order-restaurant";
+import { getOrderRestaurantName, getOrderRestaurantNameFromCatalog } from "@/lib/order-restaurant";
 import { ArrowLeft } from "lucide-react";
 
 export default function ProfilePage() {
@@ -10,6 +11,7 @@ export default function ProfilePage() {
   const { data: profile, isLoading: isLoadingProfile, error: profileError } = useCustomerProfile();
   const { data: addresses, isLoading: isLoadingAddresses } = useAddresses();
   const { data: orders, isLoading: isLoadingOrders } = useOrders();
+  const { data: restaurantCatalog } = useRestaurantCatalog();
 
   if (isLoadingProfile) {
     return (
@@ -164,9 +166,7 @@ export default function ProfilePage() {
                   <div className="flex justify-between items-start">
                     <div>
                       <div className="text-white font-medium">Order #{order.id}</div>
-                      <div className="text-red-400 text-sm font-medium">
-                        {getOrderRestaurantName(order)}
-                      </div>
+                      <ProfileOrderRestaurantName order={order} restaurantCatalog={restaurantCatalog} />
                       <div className="text-gray-400 text-sm">
                         {order.placed || (order.created_at ? new Date(order.created_at).toLocaleDateString() : "Recently")}
                       </div>
@@ -199,6 +199,30 @@ export default function ProfilePage() {
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+function ProfileOrderRestaurantName({
+  order,
+  restaurantCatalog,
+}: {
+  order: OrderListItem;
+  restaurantCatalog: RestaurantDetailResponse[] | undefined;
+}) {
+  const listName = getOrderRestaurantName(order);
+  const needsDetail = listName === "Restaurant name unavailable";
+  const { data: detail, isLoading } = useOrderDetail(needsDetail ? order.id : 0);
+  const detailName = detail ? getOrderRestaurantName(detail) : null;
+  const catalogName = getOrderRestaurantNameFromCatalog(detail ?? order, restaurantCatalog);
+
+  return (
+    <div className="text-red-400 text-sm font-medium">
+      {needsDetail
+        ? detailName && detailName !== "Restaurant name unavailable"
+          ? detailName
+          : catalogName ?? (isLoading ? "Loading restaurant…" : "Restaurant")
+        : listName}
     </div>
   );
 }
