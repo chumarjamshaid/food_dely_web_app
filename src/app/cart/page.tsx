@@ -432,32 +432,74 @@ function EditCartOptionsModal({
       const id = numericId(value);
       return id == null ? [] : [id];
     };
+    const names = (value: unknown): string[] => {
+      if (Array.isArray(value)) return value.flatMap(names);
+      if (typeof value === "string" && !/^\d+$/.test(value)) return [value.trim().toLowerCase()];
+      if (value && typeof value === "object") {
+        const record = value as Record<string, unknown>;
+        return names(record.name ?? record.item_name ?? record.label);
+      }
+      return [];
+    };
     for (const selection of cartItem.options ?? []) {
       const record = selection as unknown as Record<string, unknown>;
       const optionId = numericId(record.option ?? record.option_id ?? record.menu_item_option);
-      const values = numericIds(
-        record.menu_item_option_item
-          ?? record.item
-          ?? record.item_id
-          ?? record.menu_item_option_item_id
-          ?? record.items,
-      );
+      const values = [...new Set([
+        ...numericIds(record.menu_item_option_item),
+        ...numericIds(record.item),
+        ...numericIds(record.item_id),
+        ...numericIds(record.menu_item_option_item_id),
+        ...numericIds(record.menu_item_option_items),
+        ...numericIds(record.items),
+        ...numericIds(record.selected_item),
+        ...numericIds(record.selected_items),
+        ...numericIds(record.value),
+        ...numericIds(record.value_id),
+        ...numericIds(record.choice),
+        ...numericIds(record.choices),
+      ])];
+      const selectedNames = [...new Set([
+        ...names(record.menu_item_option_item),
+        ...names(record.item),
+        ...names(record.items),
+        ...names(record.selected_item),
+        ...names(record.selected_items),
+        ...names(record.item_name),
+        ...names(record.value),
+        ...names(record.choice),
+        ...names(record.choices),
+      ])];
 
       // Prefer the explicit option-group ID, but also match selected item IDs
       // against the currently loaded groups. This supports both legacy and
       // expanded serializer shapes returned by the cart API.
       if (optionId != null && optionGroups.some((group) => group.id === optionId)) {
+        const optionGroup = optionGroups.find((group) => group.id === optionId);
         const validValues = values.filter((value) =>
-          optionGroups.find((group) => group.id === optionId)?.items.some((item) => item.id === value),
+          optionGroup?.items.some((item) => item.id === value),
         );
         result[optionId] = [...new Set([...(result[optionId] ?? []), ...validValues])];
-        continue;
       }
+
+      // Some serializers expose both the selected item ID and the ID of the
+      // cart-option relation. Match every candidate against the selectable
+      // items instead of trusting the field name alone.
       for (const value of values) {
         const group = optionGroups.find((candidate) =>
           candidate.items.some((item) => item.id === value),
         );
         if (group) result[group.id] = [...new Set([...(result[group.id] ?? []), value])];
+      }
+      for (const selectedName of selectedNames) {
+        const group = optionGroups.find((candidate) =>
+          candidate.items.some((item) => item.name.trim().toLowerCase() === selectedName),
+        );
+        const item = group?.items.find(
+          (candidate) => candidate.name.trim().toLowerCase() === selectedName,
+        );
+        if (group && item) {
+          result[group.id] = [...new Set([...(result[group.id] ?? []), item.id])];
+        }
       }
     }
     return result;

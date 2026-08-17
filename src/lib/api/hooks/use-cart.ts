@@ -13,6 +13,60 @@ export const cartKeys = {
   current: () => [...cartKeys.all, "current"] as const,
 };
 
+const CART_OPTION_SELECTIONS_KEY = "food_dely_cart_option_selections";
+type SavedCartOptions = Record<string, { option: number; item: number }[]>;
+
+function readSavedCartOptions(): SavedCartOptions {
+  if (typeof window === "undefined") return {};
+  try {
+    return JSON.parse(window.localStorage.getItem(CART_OPTION_SELECTIONS_KEY) || "{}") as SavedCartOptions;
+  } catch {
+    return {};
+  }
+}
+
+function writeSavedCartOptions(options: SavedCartOptions) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(CART_OPTION_SELECTIONS_KEY, JSON.stringify(options));
+}
+
+function saveCartItemOptions(cartItemId: number, options: { option: number; item: number }[]) {
+  const saved = readSavedCartOptions();
+  if (options.length) saved[String(cartItemId)] = options;
+  else delete saved[String(cartItemId)];
+  writeSavedCartOptions(saved);
+}
+
+function hydrateSavedCartOptions(cart: CartResponse): CartResponse {
+  const saved = readSavedCartOptions();
+  const liveIds = new Set(cart.items.map((item) => String(item.id)));
+  let storageChanged = false;
+  for (const id of Object.keys(saved)) {
+    if (!liveIds.has(id)) {
+      delete saved[id];
+      storageChanged = true;
+    }
+  }
+  if (storageChanged) writeSavedCartOptions(saved);
+
+  return {
+    ...cart,
+    items: cart.items.map((cartItem) => {
+      const selections = saved[String(cartItem.id)];
+      if (!selections?.length) return cartItem;
+      return {
+        ...cartItem,
+        options: selections.map(({ option, item }) => ({
+          id: item,
+          option,
+          item,
+          menu_item_option_item: item,
+        })),
+      };
+    }),
+  };
+}
+
 // Fetch current cart
 async function fetchCart(): Promise<CartResponse> {
   try {
@@ -30,7 +84,7 @@ async function fetchCart(): Promise<CartResponse> {
       setSessionId(cartData.session_id);
     }
     
-    return cartData;
+    return hydrateSavedCartOptions(cartData);
   } catch (error) {
     // If cart doesn't exist yet (400 or 404), return an empty cart structure
     if (error && typeof error === "object" && "response" in error) {
@@ -105,13 +159,14 @@ async function removeFromCart(cartItemId: number): Promise<CartResponse> {
     },
   });
   const cartData = response.data;
+  saveCartItemOptions(cartItemId, []);
 
   // Store session_id for anonymous users
   if (!isAuthenticated() && cartData.session_id) {
     setSessionId(cartData.session_id);
   }
 
-  return cartData;
+  return hydrateSavedCartOptions(cartData);
 }
 
 async function updateCartItem(
@@ -129,7 +184,8 @@ async function updateCartItem(
     params: sessionId ? { session_id: sessionId } : undefined,
     headers: { "Content-Type": "multipart/form-data" },
   });
-  return response.data;
+  if (update.options) saveCartItemOptions(cartItem.id, update.options);
+  return hydrateSavedCartOptions(response.data);
 }
 
 /**
@@ -157,7 +213,14 @@ export function useAddToCart() {
   return useMutation({
     mutationFn: addToCart,
     retry: 0, // Disable retries to prevent duplicate items
-    onSuccess: (data) => {
+    onSuccess: (data, variables) => {
+      if ("menu_item" in variables && variables.options) {
+        const matchingItem = [...data.items]
+          .reverse()
+          .find((item) => item.menu_item?.id === variables.menu_item);
+        if (matchingItem) saveCartItemOptions(matchingItem.id, variables.options);
+        data = hydrateSavedCartOptions(data);
+      }
       // Store session_id immediately if present (for anonymous users)
       if (!isAuthenticated() && data.session_id) {
         setSessionId(data.session_id);
