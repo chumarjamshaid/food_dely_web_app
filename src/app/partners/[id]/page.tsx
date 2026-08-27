@@ -262,9 +262,6 @@ export default function PartnerDetailPage({ params }: { params: Promise<{ id: st
       onSuccess: () => {
         refetchCart();
       },
-      onError: () => {
-        console.error("Failed to remove item from cart");
-      },
     });
   };
 

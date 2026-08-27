@@ -56,6 +56,7 @@ export {
 // Payment hooks
 export { useConfirmPayment, useCreatePaymentIntent } from "./use-payment";
 export { useConfirmPasswordReset, useRequestPasswordReset, useValidatePasswordReset } from "./use-password-reset";
+export type { PasswordResetAccount } from "./use-password-reset";
 
 // Restaurant owner-side hooks (sales, orders)
 export {
@@ -70,7 +71,14 @@ export {
   useMarkOrderReady,
   useRestaurantOrders,
   useRestaurantRanking,
+  useRestaurantRankingPreview,
+  useApplyRestaurantRanking,
   useRestaurantSales,
+  useRestaurantClosings,
+  useSetRestaurantManualClosed,
+  useCreateRestaurantClosing,
+  useDeleteRestaurantClosing,
+  useToggleRestaurantClosing,
   useUpdateRestaurantDelivery,
   useUpdateRestaurantOpenings,
   useUpdateRestaurantSettings,
@@ -81,6 +89,8 @@ export type {
   RestaurantOrderListItem,
   RestaurantOrderStatus,
   RestaurantRankingResponse,
+  RestaurantRankingPreviewResponse,
+  RestaurantClosingPayload,
   RestaurantSalesItem,
   RestaurantSalesResponse,
   RestaurantSettingsPayload,
@@ -103,6 +113,7 @@ export {
   useCreateMenuItem,
   useCreateMenuItemOption,
   useCreateMenuItemOptionItem,
+  useCopyMenuItem,
   useDeleteMenuItem,
   useDeleteMenuItemOption,
   useDeleteMenuItemOptionItem,

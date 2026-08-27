@@ -80,38 +80,37 @@ export default function ManageMenu() {
 
   if (!authChecked || ownerQuery.isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-white text-gray-600">
+      <div className="min-h-screen flex items-center justify-center bg-[#f7f3ed] text-stone-600">
         Loading menu...
       </div>
     );
   }
 
   return (
-    <div className="bg-white min-h-screen">
+    <div className="min-h-screen bg-[#f7f3ed] text-stone-950">
       <RestaurantManagerHeader active="Menu" />
 
-      <main className="max-w-[1400px] mx-auto px-8 py-8">
-        <div className="flex items-start justify-between gap-4 mb-8">
+      <main className="mx-auto max-w-[1400px] px-4 py-9 sm:px-8 sm:py-12">
+        <div className="flex flex-col items-start justify-between gap-4 mb-8 sm:flex-row">
           <div>
-            <h1 className="text-[28px] md:text-3xl font-medium text-black">
-              Manage Menu
-            </h1>
-            <p className="text-[#424242] text-base">
+            <p className="mb-2 text-xs font-bold uppercase tracking-[0.22em] text-[#c83b2b]">Menu studio</p>
+            <h1 className="text-3xl font-semibold tracking-[-0.04em] sm:text-4xl">Manage menu</h1>
+            <p className="mt-3 text-base text-stone-600">
               Create and edit your menu items, food types and options
             </p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex w-full gap-2 sm:w-auto">
             {selected === "nowaste" ? (
               <button
                 onClick={openNewNowaste}
-                className="bg-[#CD3625] text-white rounded-full px-6 py-3 text-sm font-semibold whitespace-nowrap"
+                className="w-full whitespace-nowrap rounded-full bg-[#c83b2b] px-6 py-3 text-sm font-semibold text-white transition hover:bg-[#af3023] sm:w-auto"
               >
                 + New nowaste item
               </button>
             ) : (
               <button
                 onClick={openNew}
-                className="bg-[#CD3625] text-white rounded-full px-6 py-3 text-sm font-semibold whitespace-nowrap"
+                className="w-full whitespace-nowrap rounded-full bg-[#c83b2b] px-6 py-3 text-sm font-semibold text-white transition hover:bg-[#af3023] sm:w-auto"
               >
                 + New menu item
               </button>
@@ -120,7 +119,7 @@ export default function ManageMenu() {
         </div>
 
         {/* Category tabs */}
-        <div className="flex flex-wrap gap-2 mb-6">
+        <div className="mb-7 flex gap-2 overflow-x-auto rounded-2xl border border-stone-200 bg-white p-2 shadow-sm">
           <CategoryPill
             active={selected === "nowaste"}
             onClick={() => setSelected("nowaste")}
@@ -163,7 +162,7 @@ export default function ManageMenu() {
               </p>
             )}
             {!menuItemsQuery.isLoading && filtered.length === 0 && (
-              <div className="rounded-xl border border-gray-200 bg-white px-6 py-12 text-center text-gray-500">
+              <div className="rounded-3xl border border-dashed border-stone-300 bg-white px-6 py-16 text-center text-stone-500">
                 {items.length === 0
                   ? "No menu items yet. Click “+ New menu item” to add your first one."
                   : "No items in this food type."}
@@ -212,7 +211,7 @@ function NowasteSection({
   }
   if (items.length === 0) {
     return (
-      <div className="rounded-xl border border-gray-200 bg-white px-6 py-12 text-center text-gray-500">
+      <div className="rounded-3xl border border-dashed border-stone-300 bg-white px-6 py-16 text-center text-stone-500">
         No nowaste items yet. Click “+ New nowaste item” to create your first
         package.
       </div>
@@ -239,7 +238,7 @@ function NowasteCard({
   const linkedCount = item.nowaste_items_menu_item?.length ?? 0;
   const customCount = item.nowaste_items_custom?.length ?? 0;
   return (
-    <div className="rounded-2xl border border-[#1F8F4E]/40 bg-white shadow-sm overflow-hidden flex flex-col">
+    <div className="flex flex-col overflow-hidden rounded-3xl border border-emerald-200 bg-white shadow-[0_14px_40px_rgba(45,32,24,0.05)] transition hover:-translate-y-1">
       <div className="bg-[#1F8F4E]/10 px-4 py-2 flex items-center justify-between">
         <span className="text-xs font-semibold text-[#1F8F4E] uppercase tracking-wide">
           Nowaste
@@ -331,7 +330,7 @@ function MenuItemCard({
   const priceNum =
     typeof item.price === "number" ? item.price : parseFloat(String(item.price));
   return (
-    <div className="rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden flex flex-col">
+    <div className="flex flex-col overflow-hidden rounded-3xl border border-stone-200 bg-white shadow-[0_14px_40px_rgba(45,32,24,0.05)] transition hover:-translate-y-1">
       <div className="aspect-[4/3] bg-gray-100 relative">
         {item.image ? (
           <Image

@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../client";
-import type { RestaurantOwnerProfile } from "../types";
+import type { RestaurantClosingPeriod, RestaurantOwnerProfile } from "../types";
 import { ownerKeys } from "./use-customer";
 
 // Query keys for owner-side endpoints
@@ -18,17 +18,39 @@ export const ownerOrdersKeys = {
 
 export const ownerRankingKeys = {
   all: ["owner-ranking"] as const,
-  charge: (charge: number) => [...ownerRankingKeys.all, charge] as const,
+  state: () => [...ownerRankingKeys.all, "state"] as const,
+  preview: (charge: number) => [...ownerRankingKeys.all, "preview", charge] as const,
 };
 
 export interface RestaurantRankingResponse {
-  old_rank: number;
-  new_rank: number;
+  ranking_score: string;
+  current_rank: number;
+  ranking_cost_per_order: string;
+  rank_plus_enabled: boolean;
+  average_rating: string;
+  positive_reviews_count: number;
+  comparison_restaurants_count: number;
+  comparison_scope: string;
+  min_cost: string;
+  max_cost: string;
+  step: string;
+  terms_version: string;
+}
+
+export interface RestaurantRankingPreviewResponse {
+  current_rank: number;
+  estimated_rank: number;
+  positions_change: number;
+  current_score: string;
+  estimated_score: string;
+  comparison_restaurants_count: number;
+  comparison_scope: string;
 }
 
 export interface RestaurantSalesItem {
   date: string;
   sales: string;
+  net: string;
 }
 
 export interface RestaurantSalesResponse {
@@ -36,6 +58,8 @@ export interface RestaurantSalesResponse {
   date_to: string;
   sales_items: RestaurantSalesItem[];
   total_sales: string;
+  total_service_fees: string;
+  net_income: string;
   increase_rate: string;
 }
 
@@ -73,8 +97,8 @@ export const ORDER_STATUS_VALUES = [
   "ready",
   "delivering",
   "completed",
-  "cancel_customer",
-  "cancel_restaurant",
+  "can_cust",
+  "can_rest",
 ] as const;
 export type RestaurantOrderStatus = (typeof ORDER_STATUS_VALUES)[number];
 
@@ -121,19 +145,43 @@ export function useRestaurantOrders(
 }
 
 /**
- * GET /api/app/restaurant/ranking/?additional_charge=N
+ * GET /api/app/restaurant/ranking/
  */
-export function useRestaurantRanking(additionalCharge: number, enabled = true) {
+export function useRestaurantRanking(enabled = true) {
   return useQuery({
-    queryKey: ownerRankingKeys.charge(additionalCharge),
+    queryKey: ownerRankingKeys.state(),
     queryFn: async () => {
       const r = await apiClient.get<RestaurantRankingResponse>(
         "/api/app/restaurant/ranking/",
-        { params: { additional_charge: additionalCharge } },
       );
       return r.data;
     },
-    enabled: enabled && Number.isFinite(additionalCharge),
+    enabled,
+  });
+}
+
+export function useRestaurantRankingPreview(charge: number, enabled = true) {
+  return useQuery({
+    queryKey: ownerRankingKeys.preview(charge),
+    queryFn: async () => {
+      const r = await apiClient.post<RestaurantRankingPreviewResponse>(
+        "/api/app/restaurant/ranking/preview/",
+        { ranking_cost_per_order: charge.toFixed(2) },
+      );
+      return r.data;
+    },
+    enabled: enabled && Number.isFinite(charge),
+  });
+}
+
+export function useApplyRestaurantRanking() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (data: { ranking_cost_per_order: string; terms_accepted?: boolean; terms_version?: string }) => {
+      const r = await apiClient.post<RestaurantRankingResponse>("/api/app/restaurant/ranking/", data);
+      return r.data;
+    },
+    onSuccess: (data) => qc.setQueryData(ownerRankingKeys.state(), data),
   });
 }
 
@@ -193,15 +241,24 @@ export interface RestaurantSettingsPayload {
   address: string;
   postal_code: string;
   city: string;
+  latitude?: number | null;
+  longitude?: number | null;
+  meat_origin?: string;
+  fish_origin?: string;
 }
 
 export interface RestaurantDeliveryPayload {
   min_amount: number;
-  pickup_available: boolean;
   delivery_available: boolean;
   delivery_radius: number;
   delivery_fee: number;
-  delivery_time: number;
+}
+
+export interface RestaurantClosingPayload {
+  title?: string;
+  start_at: string;
+  end_at: string;
+  enabled?: boolean;
 }
 
 export interface RestaurantOpeningShift {
@@ -270,6 +327,50 @@ export function useUpdateRestaurantOpenings() {
       qc.setQueryData(ownerKeys.profile(), restaurant);
     },
     onError: () => invalidateOwnerProfile(qc),
+  });
+}
+
+export const ownerClosingKeys = { all: ["owner-closings"] as const };
+
+export function useRestaurantClosings(enabled = true) {
+  return useQuery({
+    queryKey: ownerClosingKeys.all,
+    queryFn: async () => (await apiClient.get<RestaurantClosingPeriod[]>("/api/app/restaurant/closings/")).data,
+    enabled,
+  });
+}
+
+export function useSetRestaurantManualClosed() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (closed: boolean) =>
+      (await apiClient.post<RestaurantOwnerProfile>(closed ? "/api/app/restaurant/close/" : "/api/app/restaurant/reopen/")).data,
+    onSuccess: (restaurant) => qc.setQueryData(ownerKeys.profile(), restaurant),
+  });
+}
+
+export function useCreateRestaurantClosing() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (data: RestaurantClosingPayload) => (await postMultipart<RestaurantClosingPeriod>("/api/app/restaurant/closings/", data)).data,
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ownerClosingKeys.all }); invalidateOwnerProfile(qc); },
+  });
+}
+
+export function useDeleteRestaurantClosing() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: number) => { await apiClient.delete(`/api/app/restaurant/closings/${id}/`); return id; },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ownerClosingKeys.all }); invalidateOwnerProfile(qc); },
+  });
+}
+
+export function useToggleRestaurantClosing() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, enabled }: { id: number; enabled: boolean }) =>
+      (await apiClient.post<RestaurantClosingPeriod>(`/api/app/restaurant/closings/${id}/${enabled ? "enable" : "disable"}/`)).data,
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ownerClosingKeys.all }); invalidateOwnerProfile(qc); },
   });
 }
 

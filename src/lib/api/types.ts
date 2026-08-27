@@ -160,25 +160,51 @@ export interface RestaurantOwnerProfile {
   address?: string;
   city?: string;
   postal_code?: string;
+  latitude?: string | number | null;
+  longitude?: string | number | null;
+  meat_origin?: string;
+  fish_origin?: string;
   owner_username?: string;
   owner_firstname?: string;
   owner_lastname?: string;
   owner_email?: string;
   active?: boolean;
   open?: boolean;
+  manually_closed?: boolean;
+  availability_status?:
+    | "open"
+    | "outside_opening_hours"
+    | "manually_closed"
+    | "planned_closing"
+    | "inactive"
+    | "pending_validation";
+  active_planned_closing?: RestaurantClosingPeriod | null;
+  validation_status?: "pending" | "approved" | "declined";
+  validation_decline_reason?: string;
+  validation_decision_at?: string | null;
   min_amount?: number;
   average_amount?: number;
   no_waste?: boolean;
-  pickup_available?: boolean;
   delivery_available?: boolean;
   delivery_radius?: number;
   delivery_fee?: number;
   delivery_time?: number;
-  ranking?: number;
+  ranking_cost_per_order?: string | number;
   rating?: number;
   reviews?: number;
   openings?: { day: string; start: string; end: string }[];
   images?: { id: number; image: string }[];
+}
+
+export interface RestaurantClosingPeriod {
+  id: number;
+  title: string;
+  start_at: string;
+  end_at: string;
+  enabled: boolean;
+  is_currently_active: boolean;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface RestaurantRegisterData {

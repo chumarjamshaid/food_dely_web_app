@@ -21,6 +21,7 @@ export interface MenuItemOptionItem {
   description: string;
   price: string | number;
   allergies: AllergyRef[] | number[];
+  available: boolean;
 }
 
 export interface MenuItemOption {
@@ -28,6 +29,8 @@ export interface MenuItemOption {
   name: string;
   multiple: boolean;
   required: boolean;
+  minimum_selections?: number;
+  maximum_selections?: number | null;
   items?: MenuItemOptionItem[];
   option_items?: MenuItemOptionItem[];
 }
@@ -64,6 +67,8 @@ export interface MenuItemOptionPayload {
   name: string;
   multiple: boolean;
   required: boolean;
+  minimum_selections?: number;
+  maximum_selections?: number | null;
 }
 
 export interface MenuItemOptionItemPayload {
@@ -71,6 +76,7 @@ export interface MenuItemOptionItemPayload {
   description: string;
   price: number;
   allergies: number[];
+  available?: boolean;
 }
 
 // ---------- Keys ----------
@@ -212,6 +218,17 @@ export function useUploadMenuItemImage() {
         qc.invalidateQueries({ queryKey: menuItemsKeys.detail(item.id) });
       }
     },
+  });
+}
+
+export function useCopyMenuItem() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, name }: { id: number; name?: string }) => {
+      const r = await apiClient.post<MenuItem>(`/api/app/restaurant/menu-items/${id}/copy/`, name ? { name } : {});
+      return r.data;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: menuItemsKeys.all }),
   });
 }
 

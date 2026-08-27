@@ -439,26 +439,17 @@ export function useClearCart() {
 
   const clearCart = async () => {
     if (!cart || !cart.items || cart.items.length === 0) {
-      console.log("Cart is already empty");
       return;
     }
-
-    console.log(`Clearing cart with ${cart.items.length} items...`);
 
     // Remove all items one by one
     const removalPromises = cart.items.map((item) =>
       removeFromCart.mutateAsync(item.id)
     );
 
-    try {
-      await Promise.all(removalPromises);
-      console.log("Cart cleared successfully");
-      // Invalidate cart to ensure it's refetched
-      queryClient.invalidateQueries({ queryKey: cartKeys.current() });
-    } catch (error) {
-      console.error("Error clearing cart:", error);
-      throw error;
-    }
+    await Promise.all(removalPromises);
+    // Invalidate cart to ensure it's refetched
+    queryClient.invalidateQueries({ queryKey: cartKeys.current() });
   };
 
   return useMutation({

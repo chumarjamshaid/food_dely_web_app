@@ -1,7 +1,8 @@
 "use client";
+
 import { useLogout, useRestaurantOwnerProfile } from "@/lib/api";
 import { hasAuthToken } from "@/lib/api/client";
-import Image from "next/image";
+import { ChevronDown, LogOut, Menu, Settings, Store, X } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
@@ -27,215 +28,146 @@ const NAV_ITEMS: { label: ManagerNavItem; href: string }[] = [
   { label: "Sales", href: "/sales" },
 ];
 
-interface Props {
-  active?: ManagerNavItem;
-}
-
-export default function RestaurantManagerHeader({ active }: Props) {
-  const logout = useLogout();
+export default function RestaurantManagerHeader({ active }: { active?: ManagerNavItem }) {
   const router = useRouter();
-  const tokenPresent =
-    typeof window !== "undefined" ? hasAuthToken() : false;
+  const logout = useLogout();
+  const tokenPresent = typeof window !== "undefined" ? hasAuthToken() : false;
   const ownerQuery = useRestaurantOwnerProfile(tokenPresent);
   const restaurant = ownerQuery.data;
-
-  const [open, setOpen] = useState(false);
-  const menuRef = useRef<HTMLDivElement>(null);
+  const [accountOpen, setAccountOpen] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const accountRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    function onClickAway(e: MouseEvent) {
-      if (!menuRef.current) return;
-      if (!menuRef.current.contains(e.target as Node)) setOpen(false);
+    if (!restaurant?.validation_status) return;
+    if (restaurant.validation_status !== "approved" || !restaurant.active) {
+      router.replace("/restaurant-status");
     }
-    function onEsc(e: KeyboardEvent) {
-      if (e.key === "Escape") setOpen(false);
+  }, [restaurant?.active, restaurant?.validation_status, router]);
+
+  useEffect(() => {
+    function closeMenus(event: MouseEvent) {
+      if (!accountRef.current?.contains(event.target as Node)) setAccountOpen(false);
     }
-    if (open) {
-      document.addEventListener("mousedown", onClickAway);
-      document.addEventListener("keydown", onEsc);
+    function closeOnEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setAccountOpen(false);
+        setMobileOpen(false);
+      }
     }
+    document.addEventListener("mousedown", closeMenus);
+    document.addEventListener("keydown", closeOnEscape);
     return () => {
-      document.removeEventListener("mousedown", onClickAway);
-      document.removeEventListener("keydown", onEsc);
+      document.removeEventListener("mousedown", closeMenus);
+      document.removeEventListener("keydown", closeOnEscape);
     };
-  }, [open]);
+  }, []);
 
   function handleLogout() {
-    setOpen(false);
+    setAccountOpen(false);
+    setMobileOpen(false);
     logout();
     router.replace("/signin");
   }
 
-  const ownerInitial =
+  const initial =
     restaurant?.name?.trim().charAt(0).toUpperCase() ||
     restaurant?.owner_firstname?.trim().charAt(0).toUpperCase() ||
     "R";
-  const ownerFullName = [restaurant?.owner_firstname, restaurant?.owner_lastname]
+  const ownerName = [restaurant?.owner_firstname, restaurant?.owner_lastname]
     .filter(Boolean)
     .join(" ");
 
   return (
-    <>
-      {/* Top bar */}
-      <div className="fixed top-0 left-0 w-full z-30 bg-white shadow border-b border-gray-200">
-        <div className="flex flex-col sm:flex-row items-center sm:justify-between justify-center px-4 sm:px-6 lg:px-8 py-3 sm:py-4 max-w-[1400px] mx-auto gap-2 sm:gap-0">
-          <div className="flex items-center justify-center gap-2 mb-2 sm:mb-0">
-            <div className="w-10 h-10 sm:w-12 sm:h-12 lg:w-14 lg:h-14 rounded-full bg-gray-100 flex items-center justify-center overflow-hidden border border-gray-200">
-              <Image
-                src="/images/logo.png"
-                alt="Logo"
-                width={56}
-                height={56}
-                className="w-full h-full object-cover"
-              />
-            </div>
-          </div>
-          <div
-            className="text-[20px] sm:text-[24px] lg:text-[36px] font-bold flex items-center justify-center text-center"
-            style={{ fontFamily: "Playfair Display" }}
-          >
-            <span className="text-[#CD3625]">FOOD</span>
-            <span className="text-black">DELY</span>
-            <span className="text-black font-serif ml-1 sm:ml-2 text-xs sm:text-sm lg:text-base">
-              Manager
-            </span>
-          </div>
-          <div
-            ref={menuRef}
-            className="relative flex gap-2 sm:gap-4 mt-2 sm:mt-0"
-          >
-            <button
-              onClick={() => setOpen((v) => !v)}
-              className="flex items-center gap-2 border border-gray-300 rounded-full pl-1.5 pr-3 sm:pr-4 py-1 sm:py-1.5 hover:bg-gray-50 transition"
-              aria-haspopup="menu"
-              aria-expanded={open}
-            >
-              <span className="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-[#CD3625] text-white flex items-center justify-center font-semibold text-sm">
-                {ownerInitial}
-              </span>
-              <span className="hidden sm:flex flex-col items-start leading-tight">
-                <span className="text-[13px] font-semibold text-black max-w-[160px] truncate">
-                  {restaurant?.name || "Restaurant"}
-                </span>
-                {ownerFullName && (
-                  <span className="text-[11px] text-gray-500 max-w-[160px] truncate">
-                    {ownerFullName}
-                  </span>
-                )}
-              </span>
-              <svg
-                width="14"
-                height="14"
-                viewBox="0 0 20 20"
-                fill="none"
-                className={`text-gray-500 transition-transform ${open ? "rotate-180" : ""}`}
-              >
-                <path
-                  d="M5 8l5 5 5-5"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
-            </button>
+    <header className="sticky top-0 z-50 border-b border-[#ece3de] bg-white/90 backdrop-blur-xl">
+      <div className="mx-auto flex h-[72px] max-w-[1400px] items-center justify-between gap-4 px-4 sm:px-8">
+        <Link href="/dashboard" className="group shrink-0 font-serif text-2xl font-black tracking-tight text-stone-950">
+          <span className="text-[#c83b2b]">FOOD</span>DELY
+          <span className="ml-2 align-middle font-sans text-[10px] font-bold uppercase tracking-[0.16em] text-stone-400 sm:text-xs">
+            Partner
+          </span>
+        </Link>
 
-            {open && (
-              <div
-                role="menu"
-                className="absolute right-0 top-full mt-2 w-72 bg-white border border-gray-200 rounded-2xl shadow-xl z-40 overflow-hidden"
-              >
-                <div className="px-4 py-3 border-b border-gray-100 bg-gray-50">
-                  <div className="flex items-center gap-3">
-                    <span className="w-10 h-10 rounded-full bg-[#CD3625] text-white flex items-center justify-center font-semibold">
-                      {ownerInitial}
-                    </span>
-                    <div className="min-w-0">
-                      <p className="text-sm font-semibold text-black truncate">
-                        {restaurant?.name || "Restaurant"}
-                      </p>
-                      {ownerFullName && (
-                        <p className="text-xs text-gray-600 truncate">
-                          {ownerFullName}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                  <div className="mt-3 space-y-1 text-xs text-gray-600">
-                    {restaurant?.owner_email && (
-                      <p className="truncate">{restaurant.owner_email}</p>
-                    )}
-                    {restaurant?.phone && (
-                      <p className="truncate">{restaurant.phone}</p>
-                    )}
-                    {(restaurant?.address ||
-                      restaurant?.city ||
-                      restaurant?.postal_code) && (
-                      <p className="truncate">
-                        {[
-                          restaurant?.address,
-                          restaurant?.postal_code,
-                          restaurant?.city,
-                        ]
-                          .filter(Boolean)
-                          .join(", ")}
-                      </p>
-                    )}
-                  </div>
-                </div>
-
-                <div className="py-1">
-                  <Link
-                    href="/restaurant-settings"
-                    onClick={() => setOpen(false)}
-                    className="block px-4 py-2 text-sm text-black hover:bg-gray-50"
-                  >
-                    Restaurant settings
-                  </Link>
-                  <button
-                    onClick={handleLogout}
-                    className="w-full text-left block px-4 py-2 text-sm text-red-600 hover:bg-red-50 font-medium"
-                  >
-                    Log out
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* Nav */}
-      <div className="flex items-center px-8 justify-between gap-4 mb-2 bg-white pt-[170px] md:pt[120px] max-w-[1400px] mx-auto">
-        {/* <button className="flex items-center justify-center mr-2 pb-2">
-          <Image
-            src="/images/menu-icon.svg"
-            alt="menu"
-            width={28}
-            height={28}
-          />
-        </button>
-        <span className="mx-4 mb-2 text-[#CD3625] text-xl">|</span> */}
-
-        <div className="flex items-center justify-between overflow-x-auto pb-2 w-full gap-2 scrollbar-hide">
+        <nav className="hidden min-w-0 items-center justify-center gap-1 lg:flex" aria-label="Restaurant management">
           {NAV_ITEMS.map((item) => {
-            const isActive = item.label === active;
+            const selected = active === item.label;
             return (
               <Link
-                href={item.href}
                 key={item.label}
-                className={`px-6 py-2 rounded-full font-normal text-base whitespace-nowrap shadow-sm border transition-all duration-150 ${isActive
-                    ? "bg-[#CD3625] text-white"
-                    : "bg-white text-black border-gray-50"
-                  }`}
+                href={item.href}
+                aria-current={selected ? "page" : undefined}
+                className={`rounded-full px-3 py-2 text-sm font-semibold transition xl:px-4 ${
+                  selected
+                    ? "bg-[#c83b2b] text-white shadow-sm"
+                    : "text-stone-600 hover:bg-[#f7f3ed] hover:text-stone-950"
+                }`}
               >
                 {item.label}
               </Link>
             );
           })}
+        </nav>
+
+        <div className="flex shrink-0 items-center gap-2">
+          <div ref={accountRef} className="relative hidden lg:block">
+            <button
+              type="button"
+              onClick={() => setAccountOpen((value) => !value)}
+              aria-haspopup="menu"
+              aria-expanded={accountOpen}
+              className="flex items-center gap-2 rounded-full border border-stone-200 bg-white p-1 pr-3 text-left transition hover:border-stone-300 hover:bg-stone-50"
+            >
+              <span className="grid h-9 w-9 place-items-center rounded-full bg-[#c83b2b] text-sm font-bold text-white">{initial}</span>
+              <span className="hidden max-w-28 truncate text-sm font-bold text-stone-800 xl:block">{restaurant?.name || "Restaurant"}</span>
+              <ChevronDown size={15} className={`text-stone-400 transition ${accountOpen ? "rotate-180" : ""}`} />
+            </button>
+
+            {accountOpen && (
+              <div role="menu" className="absolute right-0 top-[calc(100%+10px)] w-72 overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-[0_22px_60px_rgba(45,32,24,.16)]">
+                <div className="border-b border-stone-100 bg-[#faf7f4] px-4 py-4">
+                  <p className="truncate font-bold text-stone-950">{restaurant?.name || "Restaurant"}</p>
+                  {ownerName && <p className="mt-1 truncate text-sm text-stone-600">{ownerName}</p>}
+                  {restaurant?.owner_email && <p className="mt-1 truncate text-xs text-stone-400">{restaurant.owner_email}</p>}
+                </div>
+                <div className="p-2">
+                  <Link href="/restaurant-settings" onClick={() => setAccountOpen(false)} className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold text-stone-700 transition hover:bg-stone-50"><Settings size={17} />Restaurant settings</Link>
+                  <button type="button" onClick={handleLogout} className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold text-red-600 transition hover:bg-red-50"><LogOut size={17} />Sign out</button>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setMobileOpen((value) => !value)}
+            aria-label={mobileOpen ? "Close partner navigation" : "Open partner navigation"}
+            aria-expanded={mobileOpen}
+            className="grid h-11 w-11 place-items-center rounded-full border border-stone-200 bg-white text-stone-800 transition hover:bg-stone-50 lg:hidden"
+          >
+            {mobileOpen ? <X size={20} /> : <Menu size={20} />}
+          </button>
         </div>
       </div>
-      <div className="w-full h-[1px] bg-[#C5CBD1]"></div>
-    </>
+
+      {mobileOpen && (
+        <div className="border-t border-stone-100 bg-white px-4 pb-5 pt-3 sm:px-8 lg:hidden">
+          <div className="mx-auto max-w-[1400px]">
+            <div className="mb-3 flex items-center gap-3 rounded-2xl bg-[#f7f3ed] p-3">
+              <span className="grid h-10 w-10 place-items-center rounded-full bg-[#c83b2b] font-bold text-white">{initial}</span>
+              <div className="min-w-0"><p className="truncate text-sm font-bold">{restaurant?.name || "Restaurant"}</p><p className="truncate text-xs text-stone-500">{ownerName || restaurant?.owner_email}</p></div>
+            </div>
+            <nav className="grid grid-cols-2 gap-2 sm:grid-cols-4" aria-label="Mobile restaurant management">
+              {NAV_ITEMS.map((item) => (
+                <Link key={item.label} href={item.href} onClick={() => setMobileOpen(false)} className={`rounded-xl px-3 py-2.5 text-center text-sm font-semibold ${active === item.label ? "bg-[#c83b2b] text-white" : "bg-stone-50 text-stone-700"}`}>{item.label}</Link>
+              ))}
+            </nav>
+            <div className="mt-3 grid grid-cols-2 gap-2 border-t border-stone-100 pt-3">
+              <Link href="/restaurant-settings" onClick={() => setMobileOpen(false)} className="flex items-center justify-center gap-2 rounded-xl border border-stone-200 px-3 py-2.5 text-sm font-semibold"><Store size={16} />Settings</Link>
+              <button type="button" onClick={handleLogout} className="flex items-center justify-center gap-2 rounded-xl border border-red-100 px-3 py-2.5 text-sm font-semibold text-red-600"><LogOut size={16} />Sign out</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </header>
   );
 }

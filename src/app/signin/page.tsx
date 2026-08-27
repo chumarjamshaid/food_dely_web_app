@@ -58,11 +58,14 @@ export default function SignIn() {
                     : null;
                 router.replace(
                   result.role === "restaurant_owner"
-                    ? "/dashboard"
+                    ? result.restaurant?.validation_status === "approved" && result.restaurant?.active
+                      ? "/dashboard"
+                      : "/restaurant-status"
                     : safeNext || "/partners",
                 );
               },
               onError: (requestError: unknown) => {
+                setPassword("");
                 setError(extractAuthError(requestError, "The email or password is incorrect."));
               },
             }

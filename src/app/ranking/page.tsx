@@ -1,12 +1,16 @@
 "use client";
 import RestaurantManagerHeader from "@/components/RestaurantManagerHeader";
 import {
+  useApplyRestaurantRanking,
   useRestaurantOwnerProfile,
   useRestaurantRanking,
+  useRestaurantRankingPreview,
 } from "@/lib/api";
+import { extractApiError } from "@/lib/api/error";
 import { hasAuthToken } from "@/lib/api/client";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { ArrowRight, MapPin, Sparkles, TrendingUp } from "lucide-react";
 
 export default function RankingPage() {
   const router = useRouter();
@@ -29,14 +33,18 @@ export default function RankingPage() {
   }, [ownerQuery.error, router]);
 
   // Slider 0 — 5 CHF, step 0.10
-  const [charge, setCharge] = useState<number>(0.1);
-  const [agreed, setAgreed] = useState(true);
+  const [charge, setCharge] = useState<number>(0);
+  const [agreed, setAgreed] = useState(false);
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
 
-  const rankingQuery = useRestaurantRanking(charge, !!ownerQuery.data);
+  const rankingQuery = useRestaurantRanking(!!ownerQuery.data);
+  const previewQuery = useRestaurantRankingPreview(charge, !!ownerQuery.data);
+  const applyRanking = useApplyRestaurantRanking();
 
   if (!authChecked || ownerQuery.isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-white text-gray-600">
+      <div className="min-h-screen flex items-center justify-center bg-[#f7f3ed] text-stone-600">
         Loading ranking...
       </div>
     );
@@ -44,117 +52,66 @@ export default function RankingPage() {
 
   const restaurant = ownerQuery.data;
   const data = rankingQuery.data;
-  const oldRank = data?.old_rank ?? restaurant?.ranking;
-  const newRank = data?.new_rank;
-  const improvement =
-    typeof oldRank === "number" && typeof newRank === "number"
-      ? oldRank - newRank
-      : null;
+  const preview = previewQuery.data;
+  const oldRank = preview?.current_rank ?? data?.current_rank;
+  const newRank = preview?.estimated_rank;
+  const improvement = preview?.positions_change ?? null;
+  const minCost = Number(data?.min_cost ?? 0);
+  const maxCost = Number(data?.max_cost ?? 5);
+  const step = Number(data?.step ?? 0.1);
+
+  function apply() {
+    setMessage("");
+    setError("");
+    applyRanking.mutate(
+      {
+        ranking_cost_per_order: charge.toFixed(2),
+        ...(charge > 0
+          ? { terms_accepted: agreed, terms_version: data?.terms_version }
+          : {}),
+      },
+      {
+        onSuccess: () => setMessage(charge > 0 ? "Rank+ has been enabled." : "Rank+ has been disabled."),
+        onError: (requestError) => setError(extractApiError(requestError, "Rank+ could not be updated.")),
+      },
+    );
+  }
 
   return (
-    <div className="bg-white">
+    <div className="min-h-screen bg-[#f7f3ed] text-stone-950">
       <RestaurantManagerHeader active="Ranking" />
 
-      <main className="bg-white max-w-[1400px] px-8 py-4 mx-auto pt-8 pb-16">
-        <div className="flex flex-col gap-2 mb-8">
-          <h1 className="text-[28px] md:text-3xl font-medium text-black">
-            Ranking
-          </h1>
-          <p className="text-[#424242] text-base">
-            Boost your visibility with Rank+. Pick an additional charge per
-            order to see how it would change your rank.
-          </p>
+      <main className="mx-auto max-w-[1400px] px-4 py-9 sm:px-8 sm:py-12">
+        <div className="mb-8 max-w-2xl">
+          <p className="mb-2 text-xs font-bold uppercase tracking-[0.22em] text-[#c83b2b]">Marketplace visibility</p>
+          <h1 className="text-3xl font-semibold tracking-[-0.04em] sm:text-4xl">Move closer to the top with Rank+</h1>
+          <p className="mt-3 leading-7 text-stone-600">Choose an additional charge per completed order. We&apos;ll preview your estimated position before you apply it.</p>
         </div>
 
-        {/* Rank+ slider card */}
-        <div className="rounded-2xl p-12 mb-10 max-w-2xl mx-auto bg-gradient-to-br from-[#F98443] to-[#F84775] flex flex-col gap-6 shadow-lg">
-          <div className="flex flex-col gap-2">
-            <span className="text-white text-[28px] font-medium">Rank +</span>
-            <span className="text-white text-lg font-normal">
-              Extra charge per order
-            </span>
-          </div>
-
-          <div className="flex items-center justify-between text-white">
-            <span className="text-base">+0.00 CHF</span>
-            <span className="bg-white text-[#F97252] rounded-full px-6 py-2 text-lg font-semibold">
-              +{charge.toFixed(2)} CHF
-            </span>
-            <span className="text-base">+5.00 CHF</span>
-          </div>
-
-          <input
-            type="range"
-            min={0}
-            max={5}
-            step={0.1}
-            value={charge}
-            onChange={(e) => setCharge(parseFloat(e.target.value))}
-            className="w-full accent-white"
-          />
-        </div>
-
-        {/* Ranking calculator */}
-        <div className="max-w-2xl mx-auto w-full">
-          <h2 className="text-[24px] md:text-[32px] font-bold text-black mb-8">
-            New ranking calculator
-          </h2>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-8 items-start">
-            <div className="col-span-2">
-              <label className="block text-lg font-normal text-black mb-3">
-                Restaurant
-              </label>
-              <div className="flex items-center rounded-full px-6 py-3 shadow-sm text-[#F97252] text-base font-normal gap-4">
-                {restaurant?.name ?? "—"}
-              </div>
-              <span className="text-[#8F8F8F] text-sm mt-2 block pl-2">
-                {[
-                  restaurant?.address,
-                  restaurant?.postal_code,
-                  restaurant?.city,
-                ]
-                  .filter(Boolean)
-                  .join(", ") || "No address on file"}
-              </span>
+        <div className="grid gap-6 lg:grid-cols-[1.05fr_0.95fr]">
+          <section className="rounded-3xl bg-stone-950 p-6 text-white shadow-[0_20px_60px_rgba(45,32,24,0.15)] sm:p-9">
+            <div className="flex items-start justify-between gap-4"><div><span className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1.5 text-xs font-semibold"><Sparkles size={14} /> Rank+</span><h2 className="mt-5 text-2xl font-semibold">Set your growth budget</h2><p className="mt-2 text-sm text-stone-400">Extra charge applied to each completed order.</p></div><div className="rounded-2xl bg-[#c83b2b] px-4 py-3 text-right"><span className="block text-xs text-white/70">Selected</span><b className="text-xl">+{charge.toFixed(2)} CHF</b></div></div>
+            <div className="mt-12">
+              <input type="range" min={minCost} max={maxCost} step={step} value={charge} onChange={(e) => setCharge(parseFloat(e.target.value))} className="w-full accent-[#c83b2b]" />
+              <div className="mt-3 flex justify-between text-xs text-stone-400"><span>{minCost.toFixed(2)} CHF</span><span>{maxCost.toFixed(2)} CHF</span></div>
             </div>
-            <div className="flex flex-col items-center md:items-end justify-center mt-2">
-              <label className="block text-lg font-normal text-black mb-3 md:text-right w-full">
-                Your new rank
-              </label>
-              <span className="bg-[#CD3625] text-white rounded-full px-10 py-3 text-xl font-semibold">
-                {rankingQuery.isLoading
-                  ? "…"
-                  : typeof newRank === "number"
-                    ? `#${newRank}`
-                    : "—"}
-              </span>
+            <div className="mt-10 grid grid-cols-[1fr_auto_1fr] items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.04] p-5 text-center">
+              <div><span className="text-xs text-stone-400">Current rank</span><b className="mt-1 block text-3xl">{typeof oldRank === "number" ? `#${oldRank}` : "—"}</b></div><ArrowRight className="text-stone-500" /><div><span className="text-xs text-stone-400">Estimated rank</span><b className="mt-1 block text-3xl text-[#ef8b7c]">{previewQuery.isLoading ? "…" : typeof newRank === "number" ? `#${newRank}` : "—"}</b></div>
             </div>
-          </div>
+          </section>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-8 items-start">
-            <div className="col-span-2">
-              <label className="block text-lg font-normal text-black mb-3">
-                Your current rank
-              </label>
-              <div className="flex items-center rounded-full px-6 py-3 shadow-sm text-[#F97252] text-base font-normal gap-4">
-                Without additional charge
-              </div>
-            </div>
-            <div className="flex flex-col items-center md:items-end justify-center mt-2">
-              <span className="bg-[#CD3625] text-white rounded-full px-10 py-3 text-xl font-semibold mt-8 md:mt-0">
-                {typeof oldRank === "number" ? `#${oldRank}` : "—"}
-              </span>
-            </div>
-          </div>
+          <section className="rounded-3xl border border-stone-200 bg-white p-6 shadow-[0_18px_50px_rgba(45,32,24,0.06)] sm:p-9">
+            <p className="text-xs font-bold uppercase tracking-[0.2em] text-stone-400">Your restaurant</p>
+            <h2 className="mt-2 text-2xl font-semibold">Review and apply</h2>
+            <div className="mt-6 rounded-2xl bg-[#f7f3ed] p-5"><b className="block">{restaurant?.name ?? "—"}</b><span className="mt-2 flex items-start gap-2 text-sm leading-6 text-stone-500"><MapPin size={16} className="mt-1 shrink-0" />{[restaurant?.address, restaurant?.postal_code, restaurant?.city].filter(Boolean).join(", ") || "No address on file"}</span></div>
 
           {improvement !== null && (
             <div
-              className={`mb-6 px-4 py-3 rounded-lg text-sm ${improvement > 0
-                  ? "bg-green-500/10 border border-green-500 text-green-700"
+              className={`mt-5 rounded-2xl border px-4 py-3 text-sm ${improvement > 0
+                  ? "border-emerald-200 bg-emerald-50 text-emerald-700"
                   : improvement < 0
-                    ? "bg-red-500/10 border border-red-500 text-red-700"
-                    : "bg-gray-100 border border-gray-300 text-gray-700"
+                    ? "border-red-200 bg-red-50 text-red-700"
+                    : "border-stone-200 bg-stone-50 text-stone-600"
                 }`}
             >
               {improvement > 0
@@ -168,35 +125,37 @@ export default function RankingPage() {
             </div>
           )}
 
-          {rankingQuery.isError && (
-            <div className="mb-6 px-4 py-3 rounded-lg text-sm bg-red-500/10 border border-red-500 text-red-700">
+          {previewQuery.isError && (
+            <div className="mt-5 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
               Couldn&apos;t compute the new rank. Try a different value.
             </div>
           )}
 
-          <div className="flex items-center gap-3 mt-6 pl-1">
+          {charge > 0 && <label className="mt-6 flex cursor-pointer items-start gap-3 rounded-2xl border border-stone-200 p-4">
             <input
               type="checkbox"
               checked={agreed}
               onChange={(e) => setAgreed(e.target.checked)}
-              className="w-5 h-5 accent-[#CD3625]"
+              className="mt-0.5 h-5 w-5 accent-[#c83b2b]"
             />
-            <span className="text-base text-black">
+            <span className="text-sm leading-6 text-stone-700">
               I agree to the Rank+ terms and conditions.
             </span>
-          </div>
+          </label>}
+
+          {message && <div className="mt-5 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">{message}</div>}
+          {error && <div className="mt-5 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
 
           <button
-            disabled={!agreed}
-            className="mt-6 bg-[#CD3625] text-white rounded-full px-8 py-3 text-base font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
-            title="Activation endpoint not yet documented"
+            type="button"
+            onClick={apply}
+            disabled={(charge > 0 && !agreed) || applyRanking.isPending || !data}
+            className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-full bg-[#c83b2b] px-8 py-3.5 text-sm font-semibold text-white transition hover:bg-[#af3023] disabled:cursor-not-allowed disabled:opacity-50"
           >
-            Apply Rank+ (+{charge.toFixed(2)} CHF)
+            {applyRanking.isPending ? "Saving…" : charge > 0 ? `Apply Rank+ (+${charge.toFixed(2)} CHF)` : "Disable Rank+"}<TrendingUp size={17} />
           </button>
-          <p className="text-xs text-gray-500 mt-2">
-            Note: the activation endpoint is not yet documented in the API; this
-            preview is read-only.
-          </p>
+          {data?.terms_version && charge > 0 && <p className="mt-3 text-center text-xs text-stone-400">Terms version: {data.terms_version}</p>}
+          </section>
         </div>
       </main>
     </div>

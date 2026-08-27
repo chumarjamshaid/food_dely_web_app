@@ -20,16 +20,13 @@ function OrderConfirmationContent() {
     useEffect(() => {
         if (paymentIntent && redirectStatus === "succeeded" && !orderId && !confirmedOrderId && !hasConfirmed.current) {
             hasConfirmed.current = true;
-            console.log("Confirming payment from Stripe redirect with payment_intent:", paymentIntent);
             confirmPayment.mutate(
                 { payment_intent_id: paymentIntent },
                 {
                     onSuccess: (order) => {
-                        console.log("Payment confirmed, order created:", order.id);
                         setConfirmedOrderId(order.id);
                     },
                     onError: (err: unknown) => {
-                        console.error("Failed to confirm payment:", err);
                         const error = err as { response?: { data?: { message?: string; error?: string } } };
                         setConfirmError(
                             error?.response?.data?.message ||

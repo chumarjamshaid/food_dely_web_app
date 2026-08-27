@@ -16,6 +16,7 @@ import type {
   RestaurantDiscount,
 } from "@/lib/api";
 import { hasAuthToken } from "@/lib/api/client";
+import { extractApiError } from "@/lib/api/error";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
@@ -48,10 +49,11 @@ export default function DiscountsPage() {
 
   const [editing, setEditing] = useState<RestaurantDiscount | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
+  const [actionError, setActionError] = useState("");
 
   if (!authChecked || ownerQuery.isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-white text-gray-600">
+      <div className="min-h-screen flex items-center justify-center bg-[#f7f3ed] text-stone-600">
         Loading discounts...
       </div>
     );
@@ -70,35 +72,41 @@ export default function DiscountsPage() {
   }
 
   async function toggle(d: RestaurantDiscount) {
-    if (d.active) {
-      await disableDiscount.mutateAsync(d.id);
-    } else {
-      await enableDiscount.mutateAsync(d.id);
+    setActionError("");
+    try {
+      if (d.active) await disableDiscount.mutateAsync(d.id);
+      else await enableDiscount.mutateAsync(d.id);
+    } catch (requestError) {
+      setActionError(extractApiError(requestError, "Discount status could not be changed."));
     }
   }
 
   async function remove(d: RestaurantDiscount) {
     if (!confirm(`Delete discount "${d.name}"?`)) return;
-    await deleteDiscount.mutateAsync(d.id);
+    setActionError("");
+    try {
+      await deleteDiscount.mutateAsync(d.id);
+    } catch (requestError) {
+      setActionError(extractApiError(requestError, "Discount could not be deleted."));
+    }
   }
 
   return (
-    <div className="bg-white min-h-screen">
+    <div className="min-h-screen bg-[#f7f3ed] text-stone-950">
       <RestaurantManagerHeader active="Discounts" />
 
-      <main className="bg-white max-w-[1400px] px-8 py-4 mx-auto pt-8 pb-16">
-        <div className="flex items-start justify-between gap-4 mb-8">
+      <main className="mx-auto max-w-[1400px] px-4 py-9 sm:px-8 sm:py-12">
+        <div className="mb-8 flex flex-col items-start justify-between gap-5 sm:flex-row sm:items-end">
           <div>
-            <h1 className="text-[28px] md:text-3xl font-medium text-black">
-              Discounts
-            </h1>
-            <p className="text-[#424242] text-base">
+            <p className="mb-2 text-xs font-bold uppercase tracking-[0.22em] text-[#c83b2b]">Promotions</p>
+            <h1 className="text-3xl font-semibold tracking-[-0.04em] sm:text-4xl">Discounts</h1>
+            <p className="mt-3 text-base text-stone-600">
               Create promotional offers for selected menu items
             </p>
           </div>
           <button
             onClick={openNew}
-            className="bg-[#CD3625] text-white rounded-full px-6 py-3 text-sm font-semibold whitespace-nowrap"
+            className="w-full whitespace-nowrap rounded-full bg-[#c83b2b] px-6 py-3 text-sm font-semibold text-white transition hover:bg-[#af3023] sm:w-auto"
           >
             + New discount
           </button>
@@ -108,8 +116,10 @@ export default function DiscountsPage() {
           <p className="py-12 text-center text-gray-500">Loading discounts…</p>
         )}
 
+        {actionError && <div className="mb-5 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{actionError}</div>}
+
         {!discountsQuery.isLoading && discounts.length === 0 && (
-          <div className="rounded-xl border border-gray-200 bg-white px-6 py-12 text-center text-gray-500">
+          <div className="rounded-3xl border border-dashed border-stone-300 bg-white px-6 py-16 text-center text-stone-500">
             No discounts yet. Click “+ New discount” to create your first one.
           </div>
         )}
@@ -156,7 +166,7 @@ function DiscountCard({
   busy: boolean;
 }) {
   return (
-    <div className="rounded-2xl border border-gray-200 bg-white shadow-sm p-5 flex flex-col gap-3">
+    <div className="flex flex-col gap-4 rounded-3xl border border-stone-200 bg-white p-6 shadow-[0_14px_40px_rgba(45,32,24,0.05)] transition hover:-translate-y-1">
       <div className="flex items-start justify-between gap-2">
         <div>
           <h3 className="text-lg font-semibold text-black">{discount.name}</h3>
@@ -336,7 +346,7 @@ function DiscountEditModal({
 
   return (
     <div className="fixed inset-0 z-50 bg-black/40 flex items-start justify-center overflow-y-auto py-8 px-4">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl my-auto">
+      <div className="my-auto w-full max-w-2xl rounded-3xl bg-white shadow-2xl">
         <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
           <h2 className="text-xl font-semibold text-black">
             {isEditing ? "Edit discount" : "New discount"}
@@ -361,7 +371,7 @@ function DiscountEditModal({
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-black"
+              className="h-11 w-full rounded-lg border border-gray-300 px-3 py-2 text-black"
             />
           </FieldRow>
 
@@ -376,16 +386,19 @@ function DiscountEditModal({
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <FieldRow label="Reduction type">
-              <select
-                value={reductionType}
-                onChange={(e) =>
-                  setReductionType(e.target.value as "percentage" | "amount")
-                }
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-black bg-white"
-              >
-                <option value="percentage">Percentage (%)</option>
-                <option value="amount">Flat amount (CHF)</option>
-              </select>
+              <div className="relative">
+                <select
+                  value={reductionType}
+                  onChange={(e) =>
+                    setReductionType(e.target.value as "percentage" | "amount")
+                  }
+                  className="h-11 w-full appearance-none rounded-lg border border-gray-300 bg-white px-3 py-2 pr-10 text-black"
+                >
+                  <option value="percentage">Percentage (%)</option>
+                  <option value="amount">Flat amount (CHF)</option>
+                </select>
+                <span aria-hidden="true" className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-500">▼</span>
+              </div>
             </FieldRow>
             <FieldRow
               label={
@@ -398,7 +411,7 @@ function DiscountEditModal({
                 min="0"
                 value={reductionValue}
                 onChange={(e) => setReductionValue(e.target.value)}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-black"
+                className="h-11 w-full rounded-lg border border-gray-300 px-3 py-2 text-black"
               />
             </FieldRow>
           </div>
@@ -410,7 +423,7 @@ function DiscountEditModal({
               min="0"
               value={minOrder}
               onChange={(e) => setMinOrder(e.target.value)}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-black"
+              className="h-11 w-full rounded-lg border border-gray-300 px-3 py-2 text-black"
             />
           </FieldRow>
 

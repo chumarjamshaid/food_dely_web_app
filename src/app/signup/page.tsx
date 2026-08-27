@@ -1,8 +1,9 @@
 "use client";
 
-import { authSelectClass, AuthField, AuthShell, FormMessage, PasswordField, PhoneField, SubmitButton } from "@/components/auth/AuthUI";
+import { authSelectClass, AuthField, AuthShell, FormMessage, PasswordField, PhoneField, preventImplicitFormSubmit, SubmitButton } from "@/components/auth/AuthUI";
 import { useRegisterCustomer } from "@/lib/api";
 import { extractAuthError } from "@/lib/api/error";
+import { isValidPhoneNumber } from "libphonenumber-js";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -45,8 +46,10 @@ export default function SignUp() {
     >
       <form
         className="space-y-6 lg:grid lg:grid-cols-2 lg:gap-x-5 lg:gap-y-4 lg:space-y-0"
+        onKeyDown={preventImplicitFormSubmit}
         onSubmit={(event) => {
           event.preventDefault();
+          if (registerMutation.isPending) return;
           setError(null);
 
           if (formData.password.length < 8) {
@@ -74,8 +77,8 @@ export default function SignUp() {
             return;
           }
           const normalizedPhone = `${countryCode}${formData.phone.replace(/^0+/, "")}`;
-          if (formData.phone.replace(/^0+/, "").length < 7 || normalizedPhone.replace(/\D/g, "").length > 15) {
-            setError("Enter a valid phone number with 7 to 15 total digits.");
+          if (!isValidPhoneNumber(normalizedPhone)) {
+            setError("Enter a valid phone number for the selected country.");
             return;
           }
 

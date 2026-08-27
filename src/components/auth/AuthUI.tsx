@@ -186,6 +186,20 @@ export function PhoneField({
             pattern="[0-9]*"
             maxLength={maxLocalDigits}
             value={value}
+            onKeyDown={(event) => {
+              if (event.ctrlKey || event.metaKey || event.altKey) return;
+              const allowedKeys = [
+                "Backspace",
+                "Delete",
+                "Tab",
+                "ArrowLeft",
+                "ArrowRight",
+                "Home",
+                "End",
+              ];
+              if (allowedKeys.includes(event.key) || /^\d$/.test(event.key)) return;
+              event.preventDefault();
+            }}
             onChange={(event) => {
               const digitsOnly = event.target.value.replace(/\D/g, "").slice(0, maxLocalDigits);
               onValueChange(digitsOnly);
@@ -259,4 +273,11 @@ export function SubmitButton({ children, pending }: Readonly<{ children: ReactNo
       {children}
     </button>
   );
+}
+
+export function preventImplicitFormSubmit(event: React.KeyboardEvent<HTMLFormElement>) {
+  if (event.key !== "Enter" || event.nativeEvent.isComposing) return;
+  const target = event.target as HTMLElement;
+  if (target.tagName === "TEXTAREA" || target.tagName === "BUTTON") return;
+  event.preventDefault();
 }

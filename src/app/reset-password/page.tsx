@@ -7,10 +7,10 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { FormEvent, Suspense, useEffect, useState } from "react";
 
-function ResetForm() {
+function ResetForm({ account = "customer" }: { account?: "customer" | "restaurant" }) {
   const token = useSearchParams().get("token") ?? "";
-  const validate = useValidatePasswordReset();
-  const confirm = useConfirmPasswordReset();
+  const validate = useValidatePasswordReset(account);
+  const confirm = useConfirmPasswordReset(account);
   const [password,setPassword]=useState(""); const [again,setAgain]=useState(""); const [error,setError]=useState(""); const [done,setDone]=useState(false);
   useEffect(()=>{ if(token) validate.mutate(token); },[token]); // eslint-disable-line react-hooks/exhaustive-deps
   const submit=(e:FormEvent)=>{e.preventDefault();setError("");if(password.length<8){setError("Use at least 8 characters.");return;}if(password!==again){setError("Passwords do not match.");return;}confirm.mutate({token,password,password_confirm:again},{onSuccess:()=>setDone(true),onError:e=>setError(extractAuthError(e,"This reset link could not be used."))});};

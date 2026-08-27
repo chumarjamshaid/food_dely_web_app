@@ -95,8 +95,7 @@ function OrdersPageContent() {
       await Promise.all(addPromises);
       setReorderingOrderId(null);
       router.push("/payment");
-    } catch (error) {
-      console.error("Failed to reorder:", error);
+    } catch {
       setReorderingOrderId(null);
       alert("Failed to add items to cart. Please try again.");
     }

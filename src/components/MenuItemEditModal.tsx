@@ -4,9 +4,9 @@ import {
   useCreateMenuItem,
   useCreateMenuItemOption,
   useCreateMenuItemOptionItem,
+  useCopyMenuItem,
   useDeleteMenuItem,
   useDeleteMenuItemOption,
-  useDeleteMenuItemOptionItem,
   useFoods,
   useMenuItems,
   useUpdateMenuItem,
@@ -48,6 +48,7 @@ export default function MenuItemEditModal({ item, open, onClose }: Props) {
   const updateMenuItem = useUpdateMenuItem();
   const deleteMenuItem = useDeleteMenuItem();
   const uploadImage = useUploadMenuItemImage();
+  const copyMenuItem = useCopyMenuItem();
   const createFood = useCreateFood();
 
   // Local form state
@@ -160,6 +161,16 @@ export default function MenuItemEditModal({ item, open, onClose }: Props) {
     }
   }
 
+  async function handleCopy() {
+    if (!item) return;
+    try {
+      await copyMenuItem.mutateAsync({ id: item.id, name: `${item.name} Copy` });
+      onClose();
+    } catch (err) {
+      setErrorMsg(extractError(err, "Could not copy menu item."));
+    }
+  }
+
   if (!open) return null;
 
   return (
@@ -226,7 +237,7 @@ export default function MenuItemEditModal({ item, open, onClose }: Props) {
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-black"
+                className="h-11 w-full rounded-lg border border-gray-300 px-3 py-2 text-black"
               />
             </Field>
             <Field label="Price (CHF)">
@@ -236,7 +247,7 @@ export default function MenuItemEditModal({ item, open, onClose }: Props) {
                 min="0"
                 value={price}
                 onChange={(e) => setPrice(e.target.value)}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-black"
+                className="h-11 w-full rounded-lg border border-gray-300 px-3 py-2 text-black"
               />
             </Field>
           </div>
@@ -262,7 +273,7 @@ export default function MenuItemEditModal({ item, open, onClose }: Props) {
                 onChange={(e) =>
                   setFoodId(e.target.value === "" ? "" : Number(e.target.value))
                 }
-                className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-black bg-white"
+                className="h-11 flex-1 appearance-auto rounded-lg border border-gray-300 bg-white px-3 py-2 text-black"
                 disabled={foodsQuery.isLoading}
               >
                 <option value="">
@@ -277,7 +288,7 @@ export default function MenuItemEditModal({ item, open, onClose }: Props) {
               <button
                 type="button"
                 onClick={() => setShowNewFood((v) => !v)}
-                className="border border-[#CD3625] text-[#CD3625] rounded-lg px-3 py-2 text-sm whitespace-nowrap"
+                className="h-11 whitespace-nowrap rounded-lg border border-[#CD3625] px-3 text-sm text-[#CD3625]"
               >
                 {showNewFood ? "Cancel" : "+ New"}
               </button>
@@ -345,14 +356,17 @@ export default function MenuItemEditModal({ item, open, onClose }: Props) {
         <div className="px-6 py-4 border-t border-gray-200 flex justify-between gap-3">
           <div>
             {isEditing && (
-              <button
-                type="button"
-                onClick={handleDelete}
-                disabled={deleteMenuItem.isPending}
-                className="border border-red-500 text-red-600 rounded-full px-5 py-2 text-sm disabled:opacity-50"
-              >
-                {deleteMenuItem.isPending ? "Deleting…" : "Delete"}
-              </button>
+              <div className="flex gap-2">
+                <button type="button" onClick={handleCopy} disabled={copyMenuItem.isPending} className="border border-gray-300 text-black rounded-full px-5 py-2 text-sm disabled:opacity-50">{copyMenuItem.isPending ? "Copying…" : "Copy"}</button>
+                <button
+                  type="button"
+                  onClick={handleDelete}
+                  disabled={deleteMenuItem.isPending}
+                  className="border border-red-500 text-red-600 rounded-full px-5 py-2 text-sm disabled:opacity-50"
+                >
+                  {deleteMenuItem.isPending ? "Deleting…" : "Delete"}
+                </button>
+              </div>
             )}
           </div>
           <div className="flex gap-3">
@@ -530,7 +544,6 @@ function OptionGroupRow({
 
   const createItem = useCreateMenuItemOptionItem();
   const updateItem = useUpdateMenuItemOptionItem();
-  const deleteItem = useDeleteMenuItemOptionItem();
 
   const [creatingItem, setCreatingItem] = useState(false);
   const [itemName, setItemName] = useState("");
@@ -562,15 +575,6 @@ function OptionGroupRow({
     setItemDesc("");
     setItemPrice("");
     setCreatingItem(false);
-  }
-
-  async function handleDeleteItem(itemId: number) {
-    if (!confirm("Delete this option item?")) return;
-    await deleteItem.mutateAsync({
-      menuItemId,
-      optionId: option.id,
-      itemId,
-    });
   }
 
   return (
@@ -671,7 +675,6 @@ function OptionGroupRow({
                 data: payload,
               })
             }
-            onDelete={() => handleDeleteItem(it.id)}
           />
         ))}
       </ul>
@@ -734,7 +737,6 @@ function OptionGroupRow({
 function OptionItemRow({
   data,
   onUpdate,
-  onDelete,
 }: {
   data: MenuItemOptionItem;
   onUpdate: (payload: {
@@ -743,7 +745,6 @@ function OptionItemRow({
     price: number;
     allergies: number[];
   }) => Promise<MenuItemOptionItem>;
-  onDelete: () => void;
 }) {
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(data.name);
@@ -834,9 +835,10 @@ function OptionItemRow({
         </button>
         <button
           type="button"
-          onClick={onDelete}
-          aria-label="delete"
-          className="text-red-500 hover:text-red-700"
+          disabled
+          title="Disabled until the backend option-choice delete defect is fixed."
+          aria-label="delete unavailable"
+          className="cursor-not-allowed text-gray-300"
         >
           🗑
         </button>

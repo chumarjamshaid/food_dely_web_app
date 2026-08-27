@@ -94,6 +94,8 @@ interface TokenResponse {
 // fall back to probing the restaurant endpoint, since the docs guarantee
 // it returns 404 (api.restaurant_not_found) for non-owners.
 interface TokenUserHint {
+  email?: string;
+  username?: string;
   type?: string;
   role?: string;
   is_restaurant_owner?: boolean;
@@ -128,9 +130,14 @@ function detectOwnerHint(data: TokenResponseWithUser): boolean | null {
 }
 
 async function login(credentials: LoginCredentials): Promise<LoginResult> {
+  // A sign-in form must never inherit a previous user's bearer/refresh token.
+  // This also prevents a failed login from appearing successful because stale
+  // authenticated profile data is still available in the browser.
+  clearAuthToken();
   const sessionId = getOrCreateSessionId();
+  const requestedIdentity = credentials.username.trim().toLowerCase();
   const tokenResponse = await apiClient.post<TokenResponseWithUser>("/api/token/", {
-    username: credentials.username.trim().toLowerCase(),
+    username: requestedIdentity,
     password: credentials.password,
   }, {
     params: sessionId ? { session_id: sessionId } : undefined,
@@ -144,6 +151,14 @@ async function login(credentials: LoginCredentials): Promise<LoginResult> {
 
   if (!token) {
     throw new Error("Token not found in response");
+  }
+
+  const returnedIdentity = (
+    tokenResponse.data.user?.email || tokenResponse.data.user?.username || ""
+  ).trim().toLowerCase();
+  if (returnedIdentity && returnedIdentity !== requestedIdentity) {
+    clearAuthToken();
+    throw new Error("The authenticated account does not match the submitted email.");
   }
 
   setAuthTokens(token, tokenResponse.data.refresh);

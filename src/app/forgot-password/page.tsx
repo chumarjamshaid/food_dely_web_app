@@ -10,7 +10,8 @@ export default function ForgotPassword() {
   const [email, setEmail] = useState("");
   const [sent, setSent] = useState(false);
   const [error, setError] = useState("");
-  const reset = useRequestPasswordReset();
+  const [account, setAccount] = useState<"customer" | "restaurant">("customer");
+  const reset = useRequestPasswordReset(account);
 
   const submit = (event: FormEvent) => {
     event.preventDefault(); setError("");
@@ -28,7 +29,7 @@ export default function ForgotPassword() {
         <h1 className="mt-2 text-3xl font-black tracking-[-.04em]">{sent?"Check your inbox":"Reset your password"}</h1>
         <p className="mt-3 text-sm leading-6 text-[#756a65]">{sent?<>If an account exists for <strong>{email}</strong>, we sent secure reset instructions.</>:"Enter the email used for your Fooddely account."}</p>
         {error&&<p role="alert" className="mt-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}
-        {!sent?<form onSubmit={submit} className="mt-7 space-y-5"><label className="block text-sm font-bold">Email address<input type="email" autoComplete="email" required value={email} onChange={e=>setEmail(e.target.value)} placeholder="you@example.com" className="mt-2 h-13 w-full rounded-xl border border-[#ded4cf] bg-white px-4 outline-none transition focus:border-[#c83f28] focus:ring-4 focus:ring-[#c83f28]/10"/></label><button disabled={reset.isPending} className="flex h-13 w-full items-center justify-center gap-2 rounded-xl bg-[#c83f28] font-bold text-white transition hover:-translate-y-0.5 hover:bg-[#ad321f] disabled:opacity-60">{reset.isPending&&<LoaderCircle size={18} className="animate-spin"/>}{reset.isPending?"Sending…":"Send reset link"}</button></form>:<button onClick={()=>setSent(false)} className="mt-7 h-13 w-full rounded-xl border border-[#ded4cf] font-bold transition hover:bg-[#faf6f3]">Use another email</button>}
+        {!sent?<form onSubmit={submit} className="mt-7 space-y-5"><fieldset><legend className="text-sm font-bold">Account type</legend><div className="mt-2 grid grid-cols-2 gap-2">{(["customer","restaurant"] as const).map(type=><label key={type} className={`cursor-pointer rounded-xl border px-3 py-2 text-center text-sm font-semibold capitalize ${account===type?"border-[#c83f28] bg-[#fff0eb] text-[#b63825]":"border-[#ded4cf]"}`}><input className="sr-only" type="radio" name="account" checked={account===type} onChange={()=>setAccount(type)}/>{type}</label>)}</div></fieldset><label className="block text-sm font-bold">Email address<input type="email" autoComplete="email" required value={email} onChange={e=>setEmail(e.target.value)} placeholder="you@example.com" className="mt-2 h-13 w-full rounded-xl border border-[#ded4cf] bg-white px-4 outline-none transition focus:border-[#c83f28] focus:ring-4 focus:ring-[#c83f28]/10"/></label><button disabled={reset.isPending} className="flex h-13 w-full items-center justify-center gap-2 rounded-xl bg-[#c83f28] font-bold text-white transition hover:-translate-y-0.5 hover:bg-[#ad321f] disabled:opacity-60">{reset.isPending&&<LoaderCircle size={18} className="animate-spin"/>}{reset.isPending?"Sending…":"Send reset link"}</button></form>:<button onClick={()=>setSent(false)} className="mt-7 h-13 w-full rounded-xl border border-[#ded4cf] font-bold transition hover:bg-[#faf6f3]">Use another email</button>}
       </section>
     </div>
   </main>;

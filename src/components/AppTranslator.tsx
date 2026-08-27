@@ -145,6 +145,7 @@ const FRENCH: Record<string, string> = {
 };
 
 const originalText = new WeakMap<Text, string>();
+const originalAttributes = new WeakMap<Element, Map<string, string>>();
 const translatedAttributes = ["placeholder", "title", "aria-label"] as const;
 
 const PHRASES: Array<[RegExp, string]> = [
@@ -232,13 +233,16 @@ export default function AppTranslator() {
         ? [root as Element, ...(root as Element).querySelectorAll("*")]
         : [];
       for (const element of elements) {
+        let originals = originalAttributes.get(element);
+        if (!originals) {
+          originals = new Map<string, string>();
+          originalAttributes.set(element, originals);
+        }
         for (const attribute of translatedAttributes) {
           const value = element.getAttribute(attribute);
           if (!value) continue;
-          const dataKey = `languageOriginal${attribute.replace(/-([a-z])/g, (_, letter: string) => letter.toUpperCase()).replace(/^./, (letter) => letter.toUpperCase())}`;
-          const htmlElement = element as HTMLElement;
-          if (!htmlElement.dataset[dataKey]) htmlElement.dataset[dataKey] = value;
-          const source = htmlElement.dataset[dataKey] ?? value;
+          if (!originals.has(attribute)) originals.set(attribute, value);
+          const source = originals.get(attribute) ?? value;
           const next = language === "fr" ? translated(source) : source;
           if (value !== next) element.setAttribute(attribute, next);
         }
@@ -246,13 +250,32 @@ export default function AppTranslator() {
     };
 
     translateRoot(document.body);
+    // Next.js can insert a new route's server-rendered DOM immediately before
+    // React hydrates it. Mutating that DOM from a MutationObserver microtask
+    // makes React see different attributes/text and triggers hydration errors.
+    // Defer translation until the next frame so hydration gets the original
+    // server markup first.
+    let translationFrame: number | null = null;
+    const pendingNodes = new Set<Node>();
     const observer = new MutationObserver((mutations) => {
       for (const mutation of mutations) {
-        for (const node of mutation.addedNodes) translateRoot(node);
+        for (const node of mutation.addedNodes) pendingNodes.add(node);
       }
+      if (translationFrame !== null) return;
+      translationFrame = window.requestAnimationFrame(() => {
+        translationFrame = null;
+        for (const node of pendingNodes) {
+          if (node.isConnected) translateRoot(node);
+        }
+        pendingNodes.clear();
+      });
     });
     observer.observe(document.body, { childList: true, subtree: true });
-    return () => observer.disconnect();
+    return () => {
+      observer.disconnect();
+      if (translationFrame !== null) window.cancelAnimationFrame(translationFrame);
+      pendingNodes.clear();
+    };
   }, [language]);
 
   return null;

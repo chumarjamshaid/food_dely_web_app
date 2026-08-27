@@ -144,7 +144,6 @@ function PaymentForm({
         setIsProcessing(false);
       }
     } catch (error) {
-      console.error("Stripe payment confirmation failed", error);
       const errorMessage = extractApiError(error, "Stripe could not complete this payment. Please try again.");
       onError(errorMessage);
       setIsProcessing(false);

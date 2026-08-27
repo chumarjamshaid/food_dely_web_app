@@ -45,13 +45,10 @@ function PaymentCallbackContent() {
       }
 
       // Call backend to confirm payment and create order
-      console.log("Confirming payment with backend...", paymentIntent);
-
       confirmPayment.mutate(
         { payment_intent_id: paymentIntent },
         {
           onSuccess: (order) => {
-            console.log("Order created successfully:", order.id);
             setOrderId(order.id);
             setStatus("success");
             // Redirect to order confirmation after a short delay
@@ -60,7 +57,6 @@ function PaymentCallbackContent() {
             }, 1500);
           },
           onError: (err: unknown) => {
-            console.error("Failed to confirm payment:", err);
             const message = extractApiError(err, "Failed to confirm payment. Please contact support.");
 
             // Check for specific error codes

@@ -156,7 +156,7 @@ export default function NowasteItemEditModal({ item, open, onClose }: Props) {
               <input
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                className="h-11 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
                 placeholder="Surprise Basket"
               />
             </Field>
@@ -167,7 +167,7 @@ export default function NowasteItemEditModal({ item, open, onClose }: Props) {
                 min="0"
                 value={price}
                 onChange={(e) => setPrice(e.target.value)}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                className="h-11 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
                 placeholder="9.90"
               />
             </Field>
@@ -176,7 +176,7 @@ export default function NowasteItemEditModal({ item, open, onClose }: Props) {
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 rows={2}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                className="h-11 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
                 placeholder="Daily unsold products"
               />
             </Field>
@@ -343,7 +343,7 @@ function LinkedMenuItemsSection({ nowasteItem }: { nowasteItem: NowasteItem }) {
           <select
             value={selectedId}
             onChange={(e) => setSelectedId(e.target.value)}
-            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white"
+            className="h-11 w-full appearance-auto rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm"
           >
             <option value="">— pick one —</option>
             {available.map((m) => (
@@ -362,13 +362,13 @@ function LinkedMenuItemsSection({ nowasteItem }: { nowasteItem: NowasteItem }) {
             min="1"
             value={quantity}
             onChange={(e) => setQuantity(e.target.value)}
-            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+            className="h-11 w-full rounded-lg border border-gray-300 px-3 text-sm"
           />
         </div>
         <button
           onClick={add}
           disabled={createLink.isPending || !selectedId}
-          className="bg-[#CD3625] text-white rounded-full px-5 py-2 text-sm font-semibold disabled:opacity-50"
+          className="h-11 rounded-full bg-[#CD3625] px-5 text-sm font-semibold text-white disabled:opacity-50"
         >
           {createLink.isPending ? "Adding…" : "Add"}
         </button>
@@ -537,13 +537,13 @@ function CustomItemsSection({ nowasteItem }: { nowasteItem: NowasteItem }) {
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="Name (e.g. Croissant)"
-            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white"
+            className="h-11 w-full rounded-lg border border-gray-300 bg-white px-3 text-sm"
           />
           <input
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             placeholder="Description"
-            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white"
+            className="h-11 w-full rounded-lg border border-gray-300 bg-white px-3 text-sm"
           />
         </div>
         <div className="flex items-center gap-2">
@@ -552,13 +552,13 @@ function CustomItemsSection({ nowasteItem }: { nowasteItem: NowasteItem }) {
             min="1"
             value={quantity}
             onChange={(e) => setQuantity(e.target.value)}
-            className="w-24 border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white"
+            className="h-11 w-24 rounded-lg border border-gray-300 bg-white px-3 text-sm"
             placeholder="Qty"
           />
           <button
             onClick={add}
             disabled={createMut.isPending}
-            className="bg-[#CD3625] text-white rounded-full px-5 py-2 text-sm font-semibold disabled:opacity-50 ml-auto"
+            className="ml-auto h-11 rounded-full bg-[#CD3625] px-5 text-sm font-semibold text-white disabled:opacity-50"
           >
             {createMut.isPending ? "Adding…" : "Add custom item"}
           </button>
@@ -624,13 +624,13 @@ function CustomRow({
           <input
             value={name}
             onChange={(e) => setName(e.target.value)}
-            className="border border-gray-300 rounded-lg px-3 py-2 text-sm"
+            className="h-11 rounded-lg border border-gray-300 px-3 text-sm"
             placeholder="Name"
           />
           <input
             value={description}
             onChange={(e) => setDescription(e.target.value)}
-            className="border border-gray-300 rounded-lg px-3 py-2 text-sm"
+            className="h-11 rounded-lg border border-gray-300 px-3 text-sm"
             placeholder="Description"
           />
         </div>
@@ -640,7 +640,7 @@ function CustomRow({
             min="1"
             value={quantity}
             onChange={(e) => setQuantity(e.target.value)}
-            className="w-24 border border-gray-300 rounded-lg px-3 py-2 text-sm"
+            className="h-11 w-24 rounded-lg border border-gray-300 px-3 text-sm"
           />
           {err && <span className="text-xs text-red-600">{err}</span>}
           <button

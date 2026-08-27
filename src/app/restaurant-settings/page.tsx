@@ -1,8 +1,13 @@
 "use client";
 import RestaurantManagerHeader from "@/components/RestaurantManagerHeader";
 import {
+  useCreateRestaurantClosing,
+  useDeleteRestaurantClosing,
   useDeleteRestaurantImage,
+  useRestaurantClosings,
   useRestaurantOwnerProfile,
+  useSetRestaurantManualClosed,
+  useToggleRestaurantClosing,
   useUpdateRestaurantDelivery,
   useUpdateRestaurantOpenings,
   useUpdateRestaurantSettings,
@@ -26,7 +31,7 @@ const DAYS = [
   { key: "sunday", label: "Sunday" },
 ] as const;
 
-type TabId = "details" | "delivery" | "openings" | "images";
+type TabId = "details" | "delivery" | "openings" | "availability" | "images";
 
 // Backend stores times as HH:MM:SS; <input type="time"> uses HH:MM.
 function trimSeconds(t: string) {
@@ -76,6 +81,7 @@ function RestaurantSettingsContent() {
   const initialTab: TabId =
     tabParam === "delivery" ||
     tabParam === "openings" ||
+    tabParam === "availability" ||
     tabParam === "images" ||
     tabParam === "details"
       ? tabParam
@@ -86,6 +92,7 @@ function RestaurantSettingsContent() {
       if (
         tabParam === "delivery" ||
         tabParam === "openings" ||
+        tabParam === "availability" ||
         tabParam === "images" ||
         tabParam === "details"
       ) {
@@ -97,40 +104,40 @@ function RestaurantSettingsContent() {
 
   if (!authChecked || ownerQuery.isLoading || !restaurant) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-white text-gray-600">
+      <div className="min-h-screen flex items-center justify-center bg-[#f7f3ed] text-stone-600">
         Loading restaurant settings...
       </div>
     );
   }
 
   return (
-    <div className="bg-white h-full w-full">
+    <div className="min-h-screen bg-[#f7f3ed] text-stone-950">
       <RestaurantManagerHeader active="Restaurant" />
 
-      <main className="bg-white max-w-[1400px] px-8 py-4 mx-auto pt-8 pb-16">
+      <main className="mx-auto max-w-[1400px] px-4 py-9 sm:px-8 sm:py-12">
         <div className="flex flex-col gap-2 mb-8">
-          <h1 className="text-[28px] md:text-3xl font-medium text-black">
-            Restaurant Settings
-          </h1>
-          <p className="text-[#424242] text-base">
+          <p className="text-xs font-bold uppercase tracking-[0.22em] text-[#c83b2b]">Restaurant profile</p>
+          <h1 className="text-3xl font-semibold tracking-[-0.04em] sm:text-4xl">Restaurant settings</h1>
+          <p className="mt-1 text-base text-stone-600">
             Manage your restaurant details, delivery, and opening hours
           </p>
         </div>
 
         {/* Tabs (Menu Management removed) */}
-        <div className="flex items-center gap-4 mb-8 overflow-x-auto pb-2">
+        <div className="mb-6 flex gap-2 overflow-x-auto rounded-2xl border border-stone-200 bg-white p-2 shadow-sm">
           {[
             { id: "details", label: "Restaurant Details" },
             { id: "delivery", label: "Delivery Settings" },
             { id: "openings", label: "Opening Hours" },
+            { id: "availability", label: "Closures" },
             { id: "images", label: "Images" },
           ].map((tab) => (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id as TabId)}
-              className={`px-6 py-3 rounded-full font-normal text-base whitespace-nowrap shadow-sm border transition-all duration-150 ${activeTab === tab.id
-                  ? "bg-[#CD3625] text-white"
-                  : "bg-white text-black border-gray-50 hover:bg-gray-50"
+              className={`whitespace-nowrap rounded-xl px-5 py-2.5 text-sm font-semibold transition ${activeTab === tab.id
+                  ? "bg-[#c83b2b] text-white shadow-sm"
+                  : "text-stone-600 hover:bg-[#f7f3ed]"
                 }`}
             >
               {tab.label}
@@ -138,10 +145,11 @@ function RestaurantSettingsContent() {
           ))}
         </div>
 
-        <div className="bg-white rounded-2xl border border-[#E0E0E0] shadow-sm p-8">
+        <div className="rounded-3xl border border-stone-200 bg-white p-5 shadow-[0_18px_50px_rgba(45,32,24,0.06)] sm:p-8">
           {activeTab === "details" && <DetailsTab restaurant={restaurant} />}
           {activeTab === "delivery" && <DeliveryTab restaurant={restaurant} />}
           {activeTab === "openings" && <OpeningsTab restaurant={restaurant} />}
+          {activeTab === "availability" && <AvailabilityTab restaurant={restaurant} />}
           {activeTab === "images" && <ImagesTab restaurant={restaurant} />}
         </div>
       </main>
@@ -160,6 +168,10 @@ function DetailsTab({ restaurant }: { restaurant: RestaurantOwnerProfile }) {
     address: restaurant.address ?? "",
     postal_code: restaurant.postal_code ?? "",
     city: restaurant.city ?? "",
+    latitude: restaurant.latitude != null ? String(restaurant.latitude) : "",
+    longitude: restaurant.longitude != null ? String(restaurant.longitude) : "",
+    meat_origin: restaurant.meat_origin ?? "",
+    fish_origin: restaurant.fish_origin ?? "",
   });
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
@@ -171,19 +183,32 @@ function DetailsTab({ restaurant }: { restaurant: RestaurantOwnerProfile }) {
     e.preventDefault();
     setError(null);
     setSuccess(false);
-    mutation.mutate(form, {
+    if (form.description.length > 200) {
+      setError("Description must be 200 characters or fewer.");
+      return;
+    }
+    const latitude = form.latitude.trim() === "" ? null : Number(form.latitude);
+    const longitude = form.longitude.trim() === "" ? null : Number(form.longitude);
+    if ((latitude !== null && (!Number.isFinite(latitude) || latitude < -90 || latitude > 90)) || (longitude !== null && (!Number.isFinite(longitude) || longitude < -180 || longitude > 180))) {
+      setError("Enter valid latitude (-90 to 90) and longitude (-180 to 180).");
+      return;
+    }
+    const payload = {
+      name: form.name.trim(),
+      description: form.description.trim(),
+      phone: form.phone.trim(),
+      website: form.website.trim(),
+      address: form.address.trim(),
+      postal_code: form.postal_code.trim(),
+      city: form.city.trim(),
+      meat_origin: form.meat_origin.trim(),
+      fish_origin: form.fish_origin.trim(),
+      ...(latitude !== null ? { latitude } : {}),
+      ...(longitude !== null ? { longitude } : {}),
+    };
+    mutation.mutate(payload, {
       onSuccess: () => setSuccess(true),
-      onError: (err: unknown) => {
-        const e = err as {
-          response?: { data?: { message?: string; error?: string; detail?: string } };
-        };
-        setError(
-          e?.response?.data?.message ||
-          e?.response?.data?.error ||
-          e?.response?.data?.detail ||
-          "Failed to save settings."
-        );
-      },
+      onError: (err: unknown) => setError(extractApiError(err, "Failed to save settings.")),
     });
   };
 
@@ -196,12 +221,14 @@ function DetailsTab({ restaurant }: { restaurant: RestaurantOwnerProfile }) {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <Field
           label="Restaurant Name *"
+          required
           value={form.name}
           onChange={(v) => setField("name", v)}
         />
         <Field
           label="Phone *"
           type="tel"
+          required
           value={form.phone}
           onChange={(v) => setField("phone", v)}
         />
@@ -220,8 +247,9 @@ function DetailsTab({ restaurant }: { restaurant: RestaurantOwnerProfile }) {
           </p>
         </div>
         <Field
-          label="Website"
+          label="Website *"
           type="url"
+          required
           value={form.website}
           onChange={(v) => setField("website", v)}
         />
@@ -233,25 +261,55 @@ function DetailsTab({ restaurant }: { restaurant: RestaurantOwnerProfile }) {
             value={form.description}
             onChange={(e) => setField("description", e.target.value)}
             rows={3}
+            maxLength={200}
+            required
             className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#CD3625]"
           />
+          <p className="mt-1 text-right text-xs text-gray-400">{form.description.length}/200</p>
         </div>
         <div className="md:col-span-2">
           <Field
             label="Address *"
+            required
             value={form.address}
             onChange={(v) => setField("address", v)}
           />
         </div>
         <Field
           label="City *"
+          required
           value={form.city}
           onChange={(v) => setField("city", v)}
         />
         <Field
           label="Postal Code *"
+          required
           value={form.postal_code}
           onChange={(v) => setField("postal_code", v)}
+        />
+        <Field
+          label="Latitude"
+          type="number"
+          step="any"
+          value={form.latitude}
+          onChange={(v) => setField("latitude", v)}
+        />
+        <Field
+          label="Longitude"
+          type="number"
+          step="any"
+          value={form.longitude}
+          onChange={(v) => setField("longitude", v)}
+        />
+        <Field
+          label="Meat origin"
+          value={form.meat_origin}
+          onChange={(v) => setField("meat_origin", v)}
+        />
+        <Field
+          label="Fish origin"
+          value={form.fish_origin}
+          onChange={(v) => setField("fish_origin", v)}
         />
       </div>
 
@@ -284,11 +342,9 @@ function DeliveryTab({ restaurant }: { restaurant: RestaurantOwnerProfile }) {
   const mutation = useUpdateRestaurantDelivery();
   const [form, setForm] = useState({
     min_amount: Number(restaurant.min_amount ?? 0),
-    pickup_available: Boolean(restaurant.pickup_available),
     delivery_available: Boolean(restaurant.delivery_available),
     delivery_radius: Number(restaurant.delivery_radius ?? 0),
     delivery_fee: Number(restaurant.delivery_fee ?? 0),
-    delivery_time: Number(restaurant.delivery_time ?? 0),
   });
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
@@ -338,21 +394,9 @@ function DeliveryTab({ restaurant }: { restaurant: RestaurantOwnerProfile }) {
           value={form.delivery_fee}
           onChange={(v) => setForm((p) => ({ ...p, delivery_fee: v }))}
         />
-        <NumberField
-          label="Estimated delivery time (min)"
-          step="1"
-          value={form.delivery_time}
-          onChange={(v) => setForm((p) => ({ ...p, delivery_time: v }))}
-        />
       </div>
 
       <div className="space-y-3">
-        <ToggleRow
-          label="Pickup available"
-          description="Allow customers to pick up orders at your restaurant"
-          checked={form.pickup_available}
-          onChange={(v) => setForm((p) => ({ ...p, pickup_available: v }))}
-        />
         <ToggleRow
           label="Delivery available"
           description="Offer delivery to customers within your radius"
@@ -505,26 +549,29 @@ function OpeningsTab({ restaurant }: { restaurant: RestaurantOwnerProfile }) {
               )}
               <div className="space-y-2">
                 {dayShifts.map(({ s, idx }) => (
-                  <div key={idx} className="flex items-center gap-2">
+                  <div
+                    key={idx}
+                    className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 sm:flex"
+                  >
                     <input
                       type="time"
                       value={s.start}
                       onChange={(e) =>
                         updateShift(idx, "start", e.target.value)
                       }
-                      className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#CD3625]"
+                      className="min-w-0 w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#CD3625] sm:w-auto"
                     />
                     <span className="text-gray-500">to</span>
                     <input
                       type="time"
                       value={s.end}
                       onChange={(e) => updateShift(idx, "end", e.target.value)}
-                      className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#CD3625]"
+                      className="min-w-0 w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#CD3625] sm:w-auto"
                     />
                     <button
                       type="button"
                       onClick={() => removeShift(idx)}
-                      className="ml-2 text-sm text-red-600 hover:underline"
+                      className="col-span-3 justify-self-end text-sm text-red-600 hover:underline sm:col-span-1 sm:ml-2"
                     >
                       Remove
                     </button>
@@ -560,17 +607,98 @@ function OpeningsTab({ restaurant }: { restaurant: RestaurantOwnerProfile }) {
   );
 }
 
+// ===== Availability / planned closures =====
+function AvailabilityTab({ restaurant }: { restaurant: RestaurantOwnerProfile }) {
+  const closings = useRestaurantClosings(true);
+  const manual = useSetRestaurantManualClosed();
+  const create = useCreateRestaurantClosing();
+  const remove = useDeleteRestaurantClosing();
+  const toggle = useToggleRestaurantClosing();
+  const [title, setTitle] = useState("");
+  const [startAt, setStartAt] = useState("");
+  const [endAt, setEndAt] = useState("");
+  const [error, setError] = useState("");
+
+  const submit = (event: React.FormEvent) => {
+    event.preventDefault();
+    setError("");
+    if (!startAt || !endAt || startAt >= endAt) {
+      setError("Choose an end date and time after the start date and time.");
+      return;
+    }
+    create.mutate(
+      { title: title.trim(), start_at: startAt, end_at: endAt, enabled: true },
+      {
+        onSuccess: () => { setTitle(""); setStartAt(""); setEndAt(""); },
+        onError: (requestError) => setError(extractApiError(requestError, "The planned closure could not be created.")),
+      },
+    );
+  };
+
+  const statusLabel = (restaurant.availability_status ?? "inactive").replaceAll("_", " ");
+
+  return (
+    <div className="space-y-8">
+      <section>
+        <h2 className="text-2xl font-semibold text-black">Restaurant availability</h2>
+        <p className="mt-1 text-sm text-gray-600">Current status: <span className="font-semibold capitalize">{statusLabel}</span></p>
+        <div className="mt-4 flex flex-col gap-3 rounded-xl border border-gray-200 p-4 sm:flex-row sm:items-center sm:justify-between">
+          <div><p className="font-semibold">Manual closure</p><p className="text-sm text-gray-600">Immediately stop or resume accepting orders. Closing can be blocked while orders are in progress.</p></div>
+          <button
+            type="button"
+            disabled={manual.isPending}
+            onClick={() => manual.mutate(!restaurant.manually_closed, { onError: (requestError) => setError(extractApiError(requestError, "Availability could not be changed.")) })}
+            className={`shrink-0 rounded-full px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-50 ${restaurant.manually_closed ? "bg-green-600" : "bg-[#CD3625]"}`}
+          >
+            {restaurant.manually_closed ? "Reopen restaurant" : "Close restaurant"}
+          </button>
+        </div>
+      </section>
+
+      <section>
+        <h3 className="text-xl font-semibold">Plan a closure</h3>
+        <p className="mt-1 text-sm text-gray-600">Times use the backend&apos;s Europe/Zurich timezone.</p>
+        <form onSubmit={submit} className="mt-4 grid gap-4 rounded-xl border border-gray-200 p-4 md:grid-cols-2">
+          <label className="text-sm font-medium md:col-span-2">Title<input value={title} maxLength={100} onChange={(event) => setTitle(event.target.value)} placeholder="Summer holiday" className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2.5" /></label>
+          <label className="text-sm font-medium">Starts<input type="datetime-local" required value={startAt} onChange={(event) => setStartAt(event.target.value)} className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2.5" /></label>
+          <label className="text-sm font-medium">Ends<input type="datetime-local" required value={endAt} onChange={(event) => setEndAt(event.target.value)} className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2.5" /></label>
+          {error && <p className="text-sm text-red-700 md:col-span-2">{error}</p>}
+          <button disabled={create.isPending} className="rounded-full bg-[#CD3625] px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-50 md:col-span-2 md:justify-self-end">{create.isPending ? "Creating…" : "Add planned closure"}</button>
+        </form>
+      </section>
+
+      <section>
+        <h3 className="mb-4 text-xl font-semibold">Planned closures</h3>
+        {closings.isLoading ? <p className="text-gray-500">Loading closures…</p> : null}
+        {!closings.isLoading && (closings.data?.length ?? 0) === 0 ? <p className="rounded-xl border border-gray-200 p-6 text-center text-gray-500">No planned closures.</p> : null}
+        <div className="space-y-3">
+          {closings.data?.map((closing) => (
+            <div key={closing.id} className="flex flex-col gap-3 rounded-xl border border-gray-200 p-4 sm:flex-row sm:items-center sm:justify-between">
+              <div><p className="font-semibold">{closing.title || "Planned closure"}</p><p className="text-sm text-gray-600">{closing.start_at} to {closing.end_at}</p>{closing.is_currently_active && <p className="mt-1 text-xs font-semibold text-red-700">Currently active</p>}</div>
+              <div className="flex gap-2"><button type="button" onClick={() => toggle.mutate({ id: closing.id, enabled: !closing.enabled })} className="rounded-full border border-gray-300 px-4 py-2 text-sm font-semibold">{closing.enabled ? "Disable" : "Enable"}</button><button type="button" onClick={() => remove.mutate(closing.id)} className="rounded-full border border-red-200 px-4 py-2 text-sm font-semibold text-red-700">Delete</button></div>
+            </div>
+          ))}
+        </div>
+      </section>
+    </div>
+  );
+}
+
 // ===== Small helpers =====
 function Field({
   label,
   value,
   onChange,
   type = "text",
+  required = false,
+  step,
 }: {
   label: string;
   value: string;
   onChange: (v: string) => void;
   type?: string;
+  required?: boolean;
+  step?: string;
 }) {
   return (
     <div>
@@ -579,6 +707,8 @@ function Field({
       </label>
       <input
         type={type}
+        required={required}
+        step={step}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#CD3625]"

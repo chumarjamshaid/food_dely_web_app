@@ -8,6 +8,7 @@ import type { RestaurantReview } from "@/lib/api";
 import { hasAuthToken } from "@/lib/api/client";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { MessageSquareText, Star } from "lucide-react";
 
 const PAGE_SIZE = 5;
 
@@ -36,7 +37,7 @@ export default function CustomerReviewsPage() {
 
   if (!authChecked || ownerQuery.isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-white text-gray-600">
+      <div className="min-h-screen flex items-center justify-center bg-[#f7f3ed] text-stone-600">
         Loading reviews...
       </div>
     );
@@ -46,19 +47,20 @@ export default function CustomerReviewsPage() {
   // If the backend returned fewer than the requested limit, we've reached the end.
   const reachedEnd =
     !reviewsQuery.isFetching && reviews.length < limit;
+  const average = reviews.length
+    ? reviews.reduce((sum, review) => sum + (review.stars ?? 0), 0) / reviews.length
+    : 0;
 
   return (
-    <div className="bg-white min-h-screen">
+    <div className="min-h-screen bg-[#f7f3ed] text-stone-950">
       <RestaurantManagerHeader active="Reviews" />
 
-      <main className="bg-white max-w-[1400px] px-8 py-4 mx-auto pt-8 pb-16">
-        <div className="flex flex-col gap-2 mb-8">
-          <h1 className="text-[28px] md:text-3xl font-medium text-black">
-            Customer reviews
-          </h1>
-          <p className="text-[#424242] text-base">
+      <main className="mx-auto max-w-[1400px] px-4 py-9 sm:px-8 sm:py-12">
+        <div className="mb-8 flex flex-col justify-between gap-5 md:flex-row md:items-end">
+          <div><p className="mb-2 text-xs font-bold uppercase tracking-[0.22em] text-[#c83b2b]">Customer voice</p><h1 className="text-3xl font-semibold tracking-[-0.04em] sm:text-4xl">Customer reviews</h1><p className="mt-3 text-base text-stone-600">
             Recent feedback from your customers
-          </p>
+          </p></div>
+          <div className="flex items-center gap-4 rounded-2xl border border-stone-200 bg-white px-5 py-4 shadow-sm"><span className="grid size-11 place-items-center rounded-xl bg-amber-50 text-amber-500"><Star size={21} fill="currentColor" /></span><div><b className="block text-2xl leading-none">{average.toFixed(1)}</b><small className="text-stone-500">Across {reviews.length} loaded review{reviews.length === 1 ? "" : "s"}</small></div></div>
         </div>
 
         {reviewsQuery.isLoading && reviews.length === 0 && (
@@ -66,7 +68,7 @@ export default function CustomerReviewsPage() {
         )}
 
         {!reviewsQuery.isLoading && reviews.length === 0 && (
-          <div className="rounded-xl border border-gray-200 bg-white px-6 py-12 text-center text-gray-500">
+          <div className="rounded-3xl border border-dashed border-stone-300 bg-white px-6 py-16 text-center text-stone-500"><MessageSquareText className="mx-auto mb-3 text-stone-300" size={32} />
             No reviews yet.
           </div>
         )}
@@ -82,7 +84,7 @@ export default function CustomerReviewsPage() {
             <button
               onClick={() => setLimit((n) => n + PAGE_SIZE)}
               disabled={reviewsQuery.isFetching}
-              className="bg-[#CD3625] text-white rounded-full px-8 py-3 text-sm font-semibold disabled:opacity-50"
+              className="rounded-full bg-[#c83b2b] px-8 py-3 text-sm font-semibold text-white transition hover:bg-[#af3023] disabled:opacity-50"
             >
               {reviewsQuery.isFetching ? "Loading…" : "Load more"}
             </button>
@@ -96,7 +98,7 @@ export default function CustomerReviewsPage() {
 function ReviewCard({ review }: { review: RestaurantReview }) {
   const stars = Math.max(0, Math.min(5, review.stars ?? 0));
   return (
-    <div className="rounded-2xl border border-gray-200 bg-white shadow-sm p-5 flex flex-col gap-2">
+    <div className="flex flex-col gap-3 rounded-3xl border border-stone-200 bg-white p-6 shadow-[0_14px_40px_rgba(45,32,24,0.05)]">
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-1 text-[#F5B400] text-lg">
           {Array.from({ length: 5 }).map((_, i) => (
