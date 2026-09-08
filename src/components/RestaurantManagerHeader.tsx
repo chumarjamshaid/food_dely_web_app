@@ -4,6 +4,7 @@ import { useLogout, useRestaurantOwnerProfile } from "@/lib/api";
 import { hasAuthToken } from "@/lib/api/client";
 import { ChevronDown, LogOut, Menu, Settings, Store, X } from "lucide-react";
 import Link from "next/link";
+import LanguageSwitch from "./LanguageSwitch";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
@@ -109,6 +110,7 @@ export default function RestaurantManagerHeader({ active }: { active?: ManagerNa
         </nav>
 
         <div className="flex shrink-0 items-center gap-2">
+          <LanguageSwitch theme="light" />
           <div ref={accountRef} className="relative hidden lg:block">
             <button
               type="button"

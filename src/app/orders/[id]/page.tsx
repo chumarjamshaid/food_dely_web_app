@@ -8,6 +8,7 @@ import {
   useRestaurantDetail,
 } from "@/lib/api";
 import SafeImage from "@/components/SafeImage";
+import LanguageSwitch from "@/components/LanguageSwitch";
 import type { OrderStatus } from "@/lib/api/types";
 import { getOrderRestaurantId, getOrderRestaurantName } from "@/lib/order-restaurant";
 import { ArrowLeft, Bike, Check, ChefHat, Clock3, MapPin, PackageCheck, PartyPopper, ShoppingBag, XCircle } from "lucide-react";
@@ -132,7 +133,8 @@ export default function OrderDetailPage() {
               <span className="text-[#c83b2b]">FOOD</span>DELY
             </Link>
 
-            <div className="flex justify-end">
+            <div className="flex items-center justify-end gap-2">
+              <LanguageSwitch theme="light" />
               <Link href="/cart" className="relative flex h-10 w-10 items-center justify-center rounded-xl bg-[#fff0eb] text-[#b63825]">
                 <ShoppingBag size={20} />
                 {cart?.items && cart.items.length > 0 && (

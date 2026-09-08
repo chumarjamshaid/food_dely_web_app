@@ -127,6 +127,20 @@ export function useCreateFood() {
   });
 }
 
+export function useDeleteFood() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: number) => {
+      await apiClient.delete(`/api/app/restaurant/foods/${id}/`);
+      return id;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: foodsKeys.all });
+      qc.invalidateQueries({ queryKey: menuItemsKeys.all });
+    },
+  });
+}
+
 // ---------- Menu items ----------
 
 export function useMenuItems(enabled = true) {

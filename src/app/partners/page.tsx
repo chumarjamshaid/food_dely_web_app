@@ -1,13 +1,7 @@
 "use client";
 
 import SafeImage from "@/components/SafeImage";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import LanguageSwitch from "@/components/LanguageSwitch";
 import {
   useAddresses,
   useAddressAutocomplete,
@@ -20,13 +14,17 @@ import {
 } from "@/lib/api";
 import {
   ArrowRight,
+  Bike,
   Check,
+  Clock3,
+  Leaf,
   LoaderCircle,
   LogOut,
   MapPin,
   Search,
   ShoppingBag,
   Star,
+  Tag,
   UserRound,
   X,
 } from "lucide-react";
@@ -44,6 +42,15 @@ function normalizeSearchText(value: string | null | undefined) {
     .trim();
 }
 
+function formatDiscount(discount: {
+  price_reduction_percentage: number | null;
+  price_reduction_amount: number | null;
+}) {
+  if (discount.price_reduction_percentage) return `${discount.price_reduction_percentage}% off`;
+  if (discount.price_reduction_amount) return `${Number(discount.price_reduction_amount).toFixed(2)} CHF off`;
+  return "Special offer";
+}
+
 function RestaurantListPage() {
   const searchParams = useSearchParams();
   const { isAuthenticated, user, isLoading: authLoading } = useAuth();
@@ -56,9 +63,11 @@ function RestaurantListPage() {
   const [category, setCategory] = useState<number | null>(null);
   const [availability, setAvailability] = useState("all");
   const [highlight, setHighlight] = useState("all");
-  const [deliveryType, setDeliveryType] = useState("delivery");
   const [deliveryAddress, setDeliveryAddress] = useState("");
+  const [deliveryLat, setDeliveryLat] = useState<number | null>(null);
+  const [deliveryLng, setDeliveryLng] = useState<number | null>(null);
   const [showClosed, setShowClosed] = useState(false);
+  const [showAllCategories, setShowAllCategories] = useState(false);
   const [changingLocation, setChangingLocation] = useState(false);
   const [locationSearch, setLocationSearch] = useState("");
   const [debouncedLocationSearch, setDebouncedLocationSearch] = useState("");
@@ -77,15 +86,29 @@ function RestaurantListPage() {
 
   useEffect(() => {
     const addressFromUrl = searchParams.get("address")?.trim();
+    const latFromUrl = searchParams.get("lat");
+    const lngFromUrl = searchParams.get("lng");
+    const parsedLat = latFromUrl === null ? null : Number(latFromUrl);
+    const parsedLng = lngFromUrl === null ? null : Number(lngFromUrl);
     if (addressFromUrl) {
       setDeliveryAddress(addressFromUrl);
+      setDeliveryLat(Number.isFinite(parsedLat) ? parsedLat : null);
+      setDeliveryLng(Number.isFinite(parsedLng) ? parsedLng : null);
       sessionStorage.setItem("deliveryAddress", addressFromUrl);
+      if (Number.isFinite(parsedLat) && Number.isFinite(parsedLng)) {
+        sessionStorage.setItem("deliveryLocationLat", String(parsedLat));
+        sessionStorage.setItem("deliveryLocationLng", String(parsedLng));
+      }
       return;
     }
 
     const storedAddress = sessionStorage.getItem("deliveryAddress")?.trim();
+    const storedLat = Number(sessionStorage.getItem("deliveryLocationLat"));
+    const storedLng = Number(sessionStorage.getItem("deliveryLocationLng"));
     if (storedAddress) {
       setDeliveryAddress(storedAddress);
+      setDeliveryLat(Number.isFinite(storedLat) ? storedLat : null);
+      setDeliveryLng(Number.isFinite(storedLng) ? storedLng : null);
       return;
     }
 
@@ -93,6 +116,8 @@ function RestaurantListPage() {
       const address = addresses.find((item) => item.default) ?? addresses[0];
       const formattedAddress = `${address.address}, ${address.postal_code} ${address.city}`;
       setDeliveryAddress(formattedAddress);
+      setDeliveryLat(null);
+      setDeliveryLng(null);
       sessionStorage.setItem("deliveryAddress", formattedAddress);
     }
   }, [addresses, isAuthenticated, searchParams]);
@@ -101,12 +126,26 @@ function RestaurantListPage() {
     category: category || undefined,
     open: showClosed ? undefined : true,
     delivery: availability === "delivery" ? true : undefined,
-    reviews: highlight === "rating" ? 4 : undefined,
-    nowaste: highlight === "nowaste" ? true : undefined,
     address: deliveryAddress || undefined,
+    lat: deliveryLat ?? undefined,
+    lng: deliveryLng ?? undefined,
   });
 
   const searchTerms = normalizeSearchText(search).split(" ").filter(Boolean);
+  const activeHighlightLabel =
+    highlight === "rating"
+      ? "Highly rated"
+      : highlight === "free-delivery"
+        ? "Free delivery"
+        : highlight === "nowaste"
+          ? "No Waste"
+          : "";
+  const quickFilters = [
+    { value: "open", label: "Open now", icon: <Clock3 size={16} className="text-[#4b9b60]" /> },
+    { value: "delivery", label: "Delivery", icon: <Bike size={16} className="text-[#d87836]" /> },
+    { value: "rating", label: "Deals", icon: <Tag size={16} className="text-[#f0a52f]" /> },
+    { value: "nowaste", label: "NoWaste", icon: <Leaf size={16} className="text-[#58a56b]" /> },
+  ] as const;
   const filteredRestaurants = restaurants.filter((restaurant) => {
     const searchableText = normalizeSearchText(
       `${restaurant.name} ${restaurant.description ?? ""} ${(restaurant.categories ?? []).map((item) => `${item.name} ${item.description ?? ""}`).join(" ")}`,
@@ -119,6 +158,7 @@ function RestaurantListPage() {
     if (highlight === "nowaste" && !restaurant.no_waste) return false;
     return true;
   });
+  const hasRestaurants = restaurants.length > 0;
 
   const clearFilters = () => {
     setSearch("");
@@ -128,29 +168,18 @@ function RestaurantListPage() {
     setShowClosed(false);
   };
 
-  const hasFilters = Boolean(search || category || availability !== "all" || highlight !== "all" || showClosed);
-
   return (
     <div className="min-h-screen bg-[#fbfaf8] text-[#241f1c]">
       <header className="sticky top-0 z-50 border-b border-[#ece3de] bg-white/90 backdrop-blur-xl">
-        <div className="mx-auto flex min-h-[72px] max-w-7xl items-center gap-3 px-4 sm:px-8 lg:px-10">
-          <Link href="/" className="mr-auto text-[24px] font-black tracking-[-0.04em]">
+        <div className="mx-auto flex min-h-[72px] max-w-7xl items-center gap-2 px-4 sm:gap-3 sm:px-8 lg:px-10">
+          <Link href="/" className="mr-auto text-xl font-black tracking-[-0.04em] sm:text-[24px]">
             <span className="text-[#c83b2b]">FOOD</span>DELY
           </Link>
 
           <div className="hidden rounded-xl bg-[#f4eeeb] p-1 sm:flex">
-            {["delivery", "pickup"].map((type) => (
-              <button
-                key={type}
-                type="button"
-                onClick={() => setDeliveryType(type)}
-                className={`rounded-lg px-4 py-2 text-sm font-bold capitalize transition ${
-                  deliveryType === type ? "bg-white text-[#b63825] shadow-sm" : "text-[#766b65]"
-                }`}
-              >
-                {type}
-              </button>
-            ))}
+            <span className="rounded-lg bg-white px-4 py-2 text-sm font-bold text-[#b63825] shadow-sm">
+              Delivery
+            </span>
           </div>
 
           <Link href="/cart" aria-label="Cart" className="relative grid h-10 w-10 place-items-center rounded-xl transition hover:bg-[#f7f1ee] hover:text-[#b63825]">
@@ -173,20 +202,25 @@ function RestaurantListPage() {
               </button>
             </>
           ) : (
-            <Link href="/signin" className="rounded-xl bg-[#c83b2b] px-4 py-2 text-sm font-bold text-white transition hover:bg-[#aa3022]">Sign in</Link>
+            <Link href="/signin" aria-label="Sign in" className="grid h-10 w-10 place-items-center rounded-xl bg-[#c83b2b] text-sm font-bold text-white transition hover:bg-[#aa3022] sm:w-auto sm:px-4">
+              <UserRound size={18} className="sm:hidden" aria-hidden="true" />
+              <span className="hidden sm:inline">Sign in</span>
+            </Link>
           ))}
+
+          <LanguageSwitch theme="light" />
         </div>
       </header>
 
       <main className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-8 sm:py-12 lg:px-10">
         <section className="mx-auto max-w-3xl text-center">
-          <p className="text-xs font-black uppercase tracking-[0.2em] text-[#b63825]">Restaurants near you</p>
-          <h1 className="mt-3 text-4xl font-black tracking-[-0.05em] sm:text-5xl">Choose a restaurant</h1>
-          <p className="mx-auto mt-4 max-w-2xl text-base leading-7 text-[#70645e]">
+          <p className="text-[11px] font-black uppercase tracking-[0.28em] text-[#c83b2b]">Restaurants near you</p>
+          <h1 className="mt-3 text-4xl font-black tracking-[-0.06em] text-[#241f1c] sm:text-5xl">Choose a restaurant</h1>
+          <p className="mx-auto mt-4 max-w-2xl text-sm leading-6 text-[#70645e] sm:text-base">
             Browse local restaurants, then open a restaurant to explore its complete menu and customize your order.
           </p>
           {deliveryAddress && (
-            <div className="mx-auto mt-5 flex w-fit max-w-full items-center gap-2 rounded-full border border-[#e5d7d0] bg-white px-4 py-2 text-sm font-bold text-[#5f534d] shadow-sm">
+            <div className="mx-auto mt-6 flex w-fit max-w-full items-center gap-2 rounded-full border border-[#e5d7d0] bg-white px-4 py-2 text-sm font-semibold text-[#5f534d] shadow-[0_8px_22px_rgba(55,35,27,0.06)]">
               <MapPin size={16} className="shrink-0 text-[#c83b2b]" />
               <span className="truncate">Delivering near {deliveryAddress}</span>
               <button
@@ -207,10 +241,10 @@ function RestaurantListPage() {
           )}
         </section>
 
-        <section className="mx-auto mt-9 max-w-5xl rounded-[24px] border border-[#eadfd9] bg-white p-4 shadow-[0_16px_45px_rgba(55,35,27,0.07)] sm:p-5">
+        <section className="mx-auto mt-9 w-full max-w-[940px] rounded-[24px] border border-[#eadfd9] bg-white p-4 shadow-[0_18px_50px_rgba(55,35,27,0.08)] sm:p-5">
           <div className="relative">
-            <label className="flex min-h-14 items-center gap-3 rounded-2xl border border-[#ddd3ce] bg-[#fbfaf8] px-4 transition focus-within:border-[#c83b2b] focus-within:ring-4 focus-within:ring-[#c83b2b]/10">
-              {changingLocation ? <MapPin size={21} className="text-[#c83b2b]" /> : <Search size={21} className="text-[#c83b2b]" />}
+            <label className="flex h-12 items-center gap-3 rounded-[16px] border border-[#e0d9d5] bg-white px-4 transition focus-within:border-[#c83b2b] focus-within:ring-4 focus-within:ring-[#c83b2b]/10">
+              {changingLocation ? <MapPin size={20} className="text-[#c83b2b]" /> : <Search size={20} className="text-[#e34b3d]" />}
               <input
                 ref={searchInputRef}
                 type="search"
@@ -239,11 +273,11 @@ function RestaurantListPage() {
                     }
                   }}
                   aria-label={changingLocation ? "Cancel changing location" : "Clear search"}
-                  className="rounded-lg p-1 text-stone-400 hover:bg-white"
-                >
-                  <X size={17} />
-                </button>
-              )}
+                className="rounded-lg p-1 text-stone-400 hover:bg-white"
+              >
+                <X size={17} />
+              </button>
+            )}
             </label>
 
             {changingLocation && debouncedLocationSearch.trim().length >= 3 && (
@@ -275,81 +309,138 @@ function RestaurantListPage() {
             )}
           </div>
 
-          <div className="mt-4 flex flex-wrap items-center gap-2">
-            <Select value={availability} onValueChange={setAvailability}>
-              <SelectTrigger className="w-[160px] rounded-xl data-[size=default]:h-11"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All restaurants</SelectItem>
-                <SelectItem value="delivery">Offers delivery</SelectItem>
-              </SelectContent>
-            </Select>
-            <Select value={highlight} onValueChange={setHighlight}>
-              <SelectTrigger className="w-[160px] rounded-xl data-[size=default]:h-11"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All highlights</SelectItem>
-                <SelectItem value="rating">Highly rated</SelectItem>
-                <SelectItem value="free-delivery">Free delivery</SelectItem>
-                <SelectItem value="nowaste">No Waste</SelectItem>
-              </SelectContent>
-            </Select>
-            {hasFilters && <button type="button" onClick={clearFilters} className="h-11 rounded-xl px-4 text-sm font-bold text-[#b63825] hover:bg-[#fff1ed]">Clear filters</button>}
-            <label className="ml-auto flex h-11 cursor-pointer items-center gap-2 rounded-xl border border-[#ded3cd] bg-white px-4 text-sm font-bold text-[#665b55] transition hover:border-[#c83b2b]">
-              <input
-                type="checkbox"
-                checked={showClosed}
-                onChange={(event) => setShowClosed(event.target.checked)}
-                className="h-4 w-4 accent-[#c83b2b]"
-              />
-              Display closed restaurants
-            </label>
+          <div className="mt-4">
+            <div className="scrollbar-hide flex items-center gap-3 overflow-x-auto pb-1">
+              {quickFilters.map((option) => {
+                const isActive =
+                  option.value === "open"
+                    ? !showClosed
+                    : option.value === "delivery"
+                      ? availability === "delivery"
+                      : option.value === "rating"
+                        ? highlight === "rating"
+                        : highlight === "nowaste";
+
+                return (
+                  <button
+                    key={option.value}
+                    type="button"
+                    aria-pressed={isActive}
+                    onClick={() => {
+                      if (option.value === "open") {
+                        setShowClosed((current) => !current);
+                      } else if (option.value === "delivery") {
+                        setAvailability((current) => current === "delivery" ? "all" : "delivery");
+                      } else if (option.value === "rating") {
+                        setHighlight((current) => current === "rating" ? "all" : "rating");
+                      } else {
+                        setHighlight((current) => current === "nowaste" ? "all" : "nowaste");
+                      }
+                    }}
+                    className={`inline-flex h-11 shrink-0 items-center gap-2 rounded-full border px-5 text-xs font-bold transition ${
+                      isActive
+                        ? "border-[#d9cec8] bg-[#f8f5f2] text-[#241f1c] shadow-sm"
+                        : "border-[#e4dad4] bg-white text-[#665b55] hover:border-[#c83b2b] hover:text-[#241f1c]"
+                    }`}
+                  >
+                    {option.icon}
+                    {option.label}
+                  </button>
+                );
+              })}
+
+            </div>
           </div>
         </section>
 
-        <section className="mt-7">
-          <div className="scrollbar-hide flex gap-2 overflow-x-auto pb-2 lg:justify-center">
-            <button type="button" onClick={() => setCategory(null)} className={`shrink-0 rounded-full px-5 py-2.5 text-sm font-bold transition ${category === null ? "bg-[#241b18] text-white" : "border border-[#e3d8d2] bg-white text-[#665b55] hover:border-[#c83b2b]"}`}>All cuisines</button>
-            {!categoriesLoading && categories?.map((item) => (
-              <button key={item.id} type="button" onClick={() => setCategory(item.id)} className={`shrink-0 rounded-full px-5 py-2.5 text-sm font-bold transition ${category === item.id ? "bg-[#c83b2b] text-white" : "border border-[#e3d8d2] bg-white text-[#665b55] hover:border-[#c83b2b]"}`}>{item.name}</button>
+        <section className="mt-7" aria-label="Restaurant categories">
+          <div className="scrollbar-hide flex gap-3 overflow-x-auto pb-2 lg:justify-center">
+            <button type="button" onClick={() => setCategory(null)} className={`shrink-0 rounded-full px-5 py-2.5 text-xs font-bold transition ${category === null ? "bg-[#241b18] text-white shadow-sm" : "border border-[#e3d8d2] bg-white text-[#665b55] hover:border-[#c83b2b]"}`}>All cuisines</button>
+            {!categoriesLoading && categories?.slice(0, showAllCategories ? undefined : 7).map((item) => (
+              <button key={item.id} type="button" onClick={() => setCategory(item.id)} className={`shrink-0 rounded-full px-5 py-2.5 text-xs font-bold transition ${category === item.id ? "bg-[#c83b2b] text-white shadow-sm" : "border border-[#e3d8d2] bg-white text-[#665b55] hover:border-[#c83b2b]"}`}>{item.name}</button>
             ))}
+            <button type="button" onClick={() => setShowAllCategories((current) => !current)} className="inline-flex shrink-0 items-center gap-2 rounded-full border border-[#e3d8d2] bg-white px-5 py-2.5 text-xs font-bold text-[#665b55] transition hover:border-[#c83b2b]">
+              {showAllCategories ? "Less" : "More"} <span aria-hidden="true">›</span>
+            </button>
           </div>
         </section>
 
-        <div className="mt-9 flex items-end justify-between border-b border-[#e8ded9] pb-4">
-          <div>
-            <h2 className="text-2xl font-black tracking-[-0.03em]">All restaurants</h2>
-            <p className="mt-1 text-sm text-stone-500">{isLoading ? "Finding restaurants…" : `${filteredRestaurants.length} places found`}</p>
+          <div className="mt-9 flex items-end justify-between border-b border-[#e8ded9] pb-4">
+            <div>
+              <h2 className="text-2xl font-black tracking-[-0.03em] text-[#241f1c]">{filteredRestaurants.length} restaurants</h2>
+              <p className="mt-1 text-sm text-stone-500">
+                {isLoading
+                  ? "Finding restaurants…"
+                  : activeHighlightLabel
+                    ? `${filteredRestaurants.length} ${activeHighlightLabel.toLowerCase()} places found`
+                    : `${filteredRestaurants.length} places found`}
+              </p>
+            </div>
+            <p className="hidden text-sm font-semibold text-stone-500 sm:block">Select a card to view its menu</p>
           </div>
-          <p className="hidden text-sm font-semibold text-stone-500 sm:block">Select a card to view its menu</p>
-        </div>
 
-        {isLoading ? (
+        {isLoading && !hasRestaurants ? (
           <div className="grid min-h-72 place-items-center"><span className="h-10 w-10 animate-spin rounded-full border-4 border-[#c83b2b] border-t-transparent" /></div>
-        ) : error ? (
-          <div className="mt-8 rounded-2xl border border-red-200 bg-red-50 p-8 text-center text-red-700">Restaurants could not be loaded. Please try again.</div>
+        ) : error && !hasRestaurants ? (
+          <div className="mt-8 rounded-2xl border border-red-200 bg-red-50 p-8 text-center text-red-700">
+            <h2 className="text-lg font-black">Restaurants could not be loaded</h2>
+            <p className="mx-auto mt-2 max-w-xl text-sm leading-6">
+              {deliveryAddress
+                ? "We could not verify this delivery location. Change it and select a complete address from the suggestions."
+                : "Please try again in a moment."}
+            </p>
+            {deliveryAddress && (
+              <button
+                type="button"
+                onClick={() => {
+                  setChangingLocation(true);
+                  setLocationSearch("");
+                  window.requestAnimationFrame(() => searchInputRef.current?.focus());
+                }}
+                className="mt-5 rounded-xl bg-[#c83b2b] px-5 py-3 text-sm font-bold text-white"
+              >
+                Change delivery address
+              </button>
+            )}
+          </div>
         ) : filteredRestaurants.length === 0 ? (
           <div className="mt-8 rounded-[24px] border border-dashed border-[#d9cbc4] bg-white p-12 text-center">
-            <h2 className="text-xl font-black">No restaurants found</h2>
-            <p className="mt-2 text-stone-500">Try changing your search or filters.</p>
+            <h2 className="text-xl font-black">
+              {activeHighlightLabel ? `No ${activeHighlightLabel.toLowerCase()} restaurants found` : "No restaurants found"}
+            </h2>
+            <p className="mt-2 text-stone-500">
+              {activeHighlightLabel
+                ? "Try another highlight filter or clear filters to see all restaurants."
+                : "Try changing your search or filters."}
+            </p>
             <button type="button" onClick={clearFilters} className="mt-5 rounded-xl bg-[#c83b2b] px-5 py-3 text-sm font-bold text-white">Show all restaurants</button>
           </div>
         ) : (
           <div className="mt-6 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
             {filteredRestaurants.map((restaurant) => {
               const image = restaurant.images?.[0]?.image || "/images/logo.png";
+              const restaurantDiscount = restaurant.discounts?.find((discount) =>
+                discount.active && (discount.price_reduction_percentage || discount.price_reduction_amount),
+              );
               return (
                 <Link
                   key={restaurant.id}
                   href={`/partners/${restaurant.id}`}
                   aria-label={`View ${restaurant.name} restaurant and menu`}
-                  className="group overflow-hidden rounded-[24px] border border-[#e8ddd7] bg-white shadow-[0_12px_35px_rgba(55,35,27,0.06)] transition duration-500 hover:-translate-y-2 hover:border-[#dca99d] hover:shadow-[0_25px_60px_rgba(75,42,30,0.15)] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#c83b2b]/25"
+                  className="group overflow-hidden rounded-[22px] border border-[#e8ddd7] bg-white shadow-[0_12px_35px_rgba(55,35,27,0.06)] transition duration-500 hover:-translate-y-2 hover:border-[#dca99d] hover:shadow-[0_25px_60px_rgba(75,42,30,0.15)] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#c83b2b]/25"
                 >
                   <div className="relative aspect-[16/10] isolate overflow-hidden bg-[#f4eeeb]">
                     <SafeImage src={image} alt={restaurant.name} fill sizes="(min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw" className="object-cover transition duration-700 group-hover:scale-105" fallbackClassName="object-contain bg-[#fff8f5] p-12" />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/45 via-transparent to-transparent" />
-                    <span className={`absolute left-4 top-4 rounded-full px-3 py-1.5 text-xs font-black shadow-sm backdrop-blur ${restaurant.open ? "bg-emerald-500 text-white" : "bg-white/90 text-stone-700"}`}>
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/35 via-transparent to-transparent" />
+                    <span className={`absolute left-4 top-4 rounded-full px-3 py-1 text-xs font-black shadow-sm backdrop-blur ${restaurant.open ? "bg-emerald-500 text-white" : "bg-white/90 text-stone-700"}`}>
                       {restaurant.open ? "Open now" : "Closed"}
                     </span>
-                    {restaurant.no_waste && <span className="absolute right-4 top-4 rounded-full bg-white/90 px-3 py-1.5 text-xs font-black text-emerald-700 backdrop-blur">No Waste</span>}
+                    {restaurant.no_waste && <span className="absolute right-4 top-4 rounded-full bg-white/90 px-3 py-1 text-xs font-black text-emerald-700 backdrop-blur">No Waste</span>}
+                    {restaurantDiscount && (
+                      <span className="absolute bottom-3 left-4 inline-flex items-center gap-1.5 rounded-full bg-[#c83b2b] px-3 py-1.5 text-xs font-black text-white shadow-lg">
+                        <Tag size={13} /> {formatDiscount(restaurantDiscount)}
+                      </span>
+                    )}
                   </div>
                   <div className="p-5">
                     <div className="flex items-start justify-between gap-3">

@@ -9,7 +9,7 @@ export default function LanguageSwitch({ theme = "dark" }: { theme?: "dark" | "l
     <div
       role="group"
       aria-label={language === "en" ? "Choose language" : "Choisir la langue"}
-      className={`flex items-center rounded-full p-0.5 text-[11px] font-bold backdrop-blur sm:p-1 sm:text-xs ${
+      className={`flex shrink-0 items-center rounded-full p-0.5 text-[10px] font-bold backdrop-blur sm:p-1 sm:text-xs ${
         isLight
           ? "border border-stone-200 bg-white/95 shadow-lg shadow-stone-900/10"
           : "border border-white/20 bg-black/15"
@@ -21,7 +21,7 @@ export default function LanguageSwitch({ theme = "dark" }: { theme?: "dark" | "l
           type="button"
           onClick={() => setLanguage(option)}
           aria-pressed={language === option}
-          className={`rounded-full px-2 py-1.5 transition sm:px-3 ${
+          className={`rounded-full px-1.5 py-1.5 transition sm:px-3 ${
             language === option
               ? isLight
                 ? "bg-[#c83b2b] text-white shadow-sm"

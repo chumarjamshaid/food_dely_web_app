@@ -7,8 +7,9 @@ import {
   useRemoveFromCart,
   useRestaurantDetail
 } from "@/lib/api";
-import type { MenuItemOptionResponse, MenuItemResponse } from "@/lib/api/types";
+import type { MenuItemOptionResponse, MenuItemResponse, PublicRestaurantDiscount } from "@/lib/api/types";
 import SafeImage from "@/components/SafeImage";
+import LanguageSwitch from "@/components/LanguageSwitch";
 import * as Popover from "@radix-ui/react-popover";
 import {
   clearCartRestaurantId,
@@ -24,6 +25,7 @@ import { useRouter } from "next/navigation";
 import { use, useEffect, useRef, useState } from "react";
 import {
   ArrowLeft,
+  BadgePercent,
   Check,
   ChevronDown,
   Clock3,
@@ -39,6 +41,31 @@ interface SelectedOptions {
   [itemId: number]: {
     [optionId: number]: number | number[]; // optionId -> optionItemId (single or multiple)
   };
+}
+
+function getMenuItemDiscount(discounts: PublicRestaurantDiscount[] | undefined, price: number) {
+  const activeDiscounts = (discounts ?? []).filter((discount) => discount.active);
+  if (!activeDiscounts.length) return null;
+
+  return activeDiscounts
+    .map((discount) => {
+      const percentage = Number(discount.price_reduction_percentage ?? 0);
+      const amount = Number(discount.price_reduction_amount ?? 0);
+      const reduction = Math.max((price * percentage) / 100, amount);
+      return { discount, finalPrice: Math.max(0, price - reduction), reduction };
+    })
+    .filter((offer) => offer.reduction > 0)
+    .sort((left, right) => right.reduction - left.reduction)[0] ?? null;
+}
+
+function getDiscountLabel(discount: PublicRestaurantDiscount) {
+  if (discount.price_reduction_percentage) return `${discount.price_reduction_percentage}% off`;
+  if (discount.price_reduction_amount) return `${Number(discount.price_reduction_amount).toFixed(2)} CHF off`;
+  return discount.name;
+}
+
+function isPlaceholderCopy(value: string | null | undefined) {
+  return !value?.trim() || /\b(test|dummy|sample|placeholder|lorem ipsum)\b/i.test(value);
 }
 
 export default function PartnerDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -305,6 +332,15 @@ export default function PartnerDetailPage({ params }: { params: Promise<{ id: st
     ? apiRestaurant?.foods?.find(f => f.id === selectedFoodCategoryId)
     : undefined;
   const foodCategories = apiRestaurant?.foods || [];
+  const visibleMenuItems = (currentFoodCategory?.menu_items ?? []).filter(
+    (item) => !isPlaceholderCopy(item.name),
+  );
+  const visibleNoWasteItems = (apiRestaurant?.nowaste_items ?? []).filter(
+    (item) => !isPlaceholderCopy(item.name),
+  );
+  const restaurantDiscounts = (apiRestaurant?.discounts ?? []).filter(
+    (discount) => discount.active && (discount.price_reduction_percentage || discount.price_reduction_amount),
+  );
 
   return (
     <div className="min-h-screen bg-[#fbfaf8] text-[#241f1c]">
@@ -337,25 +373,25 @@ export default function PartnerDetailPage({ params }: { params: Promise<{ id: st
 
       {/* Header */}
       <header className="fixed left-0 top-0 z-50 w-full border-b border-[#ece3de] bg-white/90 backdrop-blur-xl">
-        <div className="mx-auto grid min-h-[72px] max-w-6xl grid-cols-[1fr_auto_1fr] items-center gap-3 px-5 sm:px-8">
+        <div className="mx-auto flex min-h-[64px] max-w-6xl items-center gap-1.5 px-3 sm:grid sm:min-h-[72px] sm:grid-cols-[1fr_auto_1fr] sm:gap-3 sm:px-8">
           <Link
             href="/partners"
-            className="flex h-10 w-fit items-center gap-2 rounded-xl px-2 text-sm font-bold text-[#5e544f] transition hover:bg-[#f7f1ee] hover:text-[#b63825]"
+            className="flex h-8 w-8 shrink-0 items-center justify-center gap-2 rounded-lg text-sm font-bold text-[#5e544f] transition hover:bg-[#f7f1ee] hover:text-[#b63825] sm:h-10 sm:w-fit sm:justify-start sm:rounded-xl sm:px-2"
           >
             <ArrowLeft size={19} />
             <span className="hidden sm:inline">Restaurants</span>
           </Link>
 
           <Link href="/" className="flex items-center justify-self-center">
-            <span className="select-none text-[22px] font-black tracking-[-0.04em] sm:text-[26px]">
+            <span className="select-none text-lg font-black tracking-[-0.04em] sm:text-[26px]">
               <span className="text-[#CD3625]">FOOD</span>
               <span className="text-black">DELY</span>
             </span>
           </Link>
 
-          <nav className="flex items-center justify-self-end gap-1 sm:gap-2">
-            <Link href="/cart" aria-label="Cart" className="relative flex h-10 w-10 items-center justify-center rounded-xl text-[#514944] transition hover:bg-[#f7f1ee] hover:text-[#b63825]">
-              <ShoppingBag size={20} />
+          <nav className="ml-auto flex items-center justify-self-end gap-0.5 sm:ml-0 sm:gap-2">
+            <Link href="/cart" aria-label="Cart" className="relative flex h-8 w-8 items-center justify-center rounded-lg text-[#514944] transition hover:bg-[#f7f1ee] hover:text-[#b63825] sm:h-10 sm:w-10 sm:rounded-xl">
+              <ShoppingBag size={18} />
               {apiCart?.items && apiCart.items.length > 0 && (
                 <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full border-2 border-white bg-[#CD3625] px-1 text-[10px] font-black text-white">
                   {apiCart.items.reduce((sum, item) => sum + item.quantity, 0)}
@@ -365,7 +401,7 @@ export default function PartnerDetailPage({ params }: { params: Promise<{ id: st
             {!authLoading && (
               isAuthenticated ? (
                 <>
-                  <Link href="/profile" className="flex h-10 items-center gap-2 rounded-xl px-2 text-sm font-bold transition hover:bg-[#f7f1ee] sm:px-3">
+                  <Link href="/profile" aria-label="Profile" className="flex h-8 w-8 items-center justify-center gap-2 rounded-lg text-sm font-bold transition hover:bg-[#f7f1ee] sm:h-10 sm:w-auto sm:rounded-xl sm:px-3">
                     <UserRound size={18} />
                     <span className="hidden sm:inline">{user?.firstname || "Profile"}</span>
                   </Link>
@@ -376,16 +412,18 @@ export default function PartnerDetailPage({ params }: { params: Promise<{ id: st
                       logout();
                       window.location.href = "/";
                     }}
-                    className="flex h-10 w-10 items-center justify-center rounded-xl text-[#766b65] transition hover:bg-red-50 hover:text-red-700"
+                    className="flex h-8 w-8 items-center justify-center rounded-lg text-[#766b65] transition hover:bg-red-50 hover:text-red-700 sm:h-10 sm:w-10 sm:rounded-xl"
                   >
                     <LogOut size={18} />
                   </button>
                 </>
               ) : (
-                <Link href="/signin" className="rounded-xl bg-[#CD3625] px-4 py-2 text-sm font-bold text-white transition hover:bg-[#ad321f]">
-                  Sign in
+                <Link href="/signin" aria-label="Sign in" className="grid h-8 w-8 place-items-center rounded-lg bg-[#CD3625] text-sm font-bold text-white transition hover:bg-[#ad321f] sm:h-auto sm:w-auto sm:rounded-xl sm:px-4 sm:py-2">
+                  <UserRound size={17} className="sm:hidden" aria-hidden="true" />
+                  <span className="hidden sm:inline">Sign in</span>
                 </Link>
               ))}
+            <LanguageSwitch theme="light" />
           </nav>
         </div>
       </header>
@@ -453,6 +491,15 @@ export default function PartnerDetailPage({ params }: { params: Promise<{ id: st
                   {restaurant.delivery_fee.toFixed(2)} CHF delivery
                 </div>
               )}
+              {restaurantDiscounts.map((discount) => (
+                <div key={discount.id} className="flex items-center gap-2 rounded-xl bg-[#fff0eb] px-3 py-2 text-sm font-bold text-[#a83221]">
+                  <BadgePercent size={17} />
+                  <span>
+                    {isPlaceholderCopy(discount.name) ? "Restaurant offer" : discount.name}
+                    <span className="ml-1 font-black">· {getDiscountLabel(discount)}</span>
+                  </span>
+                </div>
+              ))}
             </div>
           </div>
 
@@ -546,9 +593,9 @@ export default function PartnerDetailPage({ params }: { params: Promise<{ id: st
                 </div>
 
                 {/* No Waste Items */}
-                {selectedFoodCategoryId === "nowaste" && apiRestaurant?.nowaste_items && apiRestaurant.nowaste_items.length > 0 && (
+                {selectedFoodCategoryId === "nowaste" && visibleNoWasteItems.length > 0 && (
                   <div className="mb-6 grid grid-cols-1 items-start gap-4">
-                    {apiRestaurant.nowaste_items.map((item) => (
+                    {visibleNoWasteItems.map((item) => (
                       <div
                         key={item.id}
                         className="group relative grid w-full overflow-hidden rounded-[22px] border border-emerald-200 bg-white shadow-[0_12px_30px_rgba(22,101,70,0.08)] transition duration-300 hover:-translate-y-1 hover:shadow-lg sm:grid-cols-[150px_1fr]"
@@ -568,7 +615,7 @@ export default function PartnerDetailPage({ params }: { params: Promise<{ id: st
                             <h3 className="text-xl font-black tracking-tight">{item.name}</h3>
                             <span className="text-lg font-black text-[#b63825]">{item.price.toFixed(2)} CHF</span>
                           </div>
-                          {item.description && <p className="mt-2 text-sm leading-6 text-[#796e68]">{item.description}</p>}
+                          {!isPlaceholderCopy(item.description) && <p className="mt-2 text-sm leading-6 text-[#796e68]">{item.description}</p>}
                         </div>
                         <button
                           className="absolute bottom-4 right-4 flex min-h-10 items-center justify-center gap-2 rounded-xl bg-[#CD3625] px-4 text-sm font-bold text-white shadow-md transition hover:-translate-y-0.5 hover:bg-[#ad321f] hover:shadow-lg disabled:opacity-50"
@@ -590,9 +637,11 @@ export default function PartnerDetailPage({ params }: { params: Promise<{ id: st
                 )}
 
                 {/* Regular Menu Items by Category */}
-                {currentFoodCategory && currentFoodCategory.menu_items && currentFoodCategory.menu_items.length > 0 && (
+                {currentFoodCategory && visibleMenuItems.length > 0 && (
                   <div className="grid grid-cols-1 items-start gap-4">
-                    {currentFoodCategory.menu_items.map((item) => (
+                    {visibleMenuItems.map((item) => {
+                      const offer = getMenuItemDiscount(item.discounts, item.price);
+                      return (
                       <div
                         key={item.id}
                         className="group relative grid w-full overflow-hidden rounded-[22px] border border-[#e9dfda] bg-white shadow-[0_12px_30px_rgba(55,35,27,0.06)] transition duration-300 hover:-translate-y-1 hover:border-[#e5b5a9] hover:shadow-[0_20px_45px_rgba(55,35,27,0.11)] sm:grid-cols-[150px_1fr]"
@@ -609,10 +658,27 @@ export default function PartnerDetailPage({ params }: { params: Promise<{ id: st
                         </div>
                         <div className="min-w-0 p-5">
                           <div className="flex flex-wrap items-start justify-between gap-3">
-                            <h3 className="text-xl font-black tracking-tight">{item.name}</h3>
-                            <span className="text-lg font-black text-[#b63825]">{item.price.toFixed(2)} CHF</span>
+                            <div>
+                              <h3 className="text-xl font-black tracking-tight">{item.name}</h3>
+                              {offer && (
+                                <span className="mt-2 inline-flex rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-black text-emerald-700">
+                                  {!isPlaceholderCopy(offer.discount.name) && `${offer.discount.name} · `}{getDiscountLabel(offer.discount)}
+                                </span>
+                              )}
+                            </div>
+                            {offer ? (
+                              <div className="text-right">
+                                <span className="text-sm font-bold text-stone-400 line-through">{item.price.toFixed(2)} CHF</span>
+                                <span className="ml-2 text-lg font-black text-[#b63825]">{offer.finalPrice.toFixed(2)} CHF</span>
+                                {offer.discount.price_reduction_min != null && (
+                                  <p className="mt-1 text-[11px] font-semibold text-stone-500">Minimum {Number(offer.discount.price_reduction_min).toFixed(2)} CHF</p>
+                                )}
+                              </div>
+                            ) : (
+                              <span className="text-lg font-black text-[#b63825]">{item.price.toFixed(2)} CHF</span>
+                            )}
                           </div>
-                          {item.description && <p className="mt-2 text-sm leading-6 text-[#796e68]">{item.description}</p>}
+                          {!isPlaceholderCopy(item.description) && <p className="mt-2 text-sm leading-6 text-[#796e68]">{item.description}</p>}
 
                           {/* Menu Item Options */}
                           {item.options && item.options.length > 0 && (
@@ -738,18 +804,19 @@ export default function PartnerDetailPage({ params }: { params: Promise<{ id: st
                           ) : (
                             <>
                               <Plus size={17} />
-                              Add to cart · {item.price.toFixed(2)} CHF
+                              Add to cart · {(offer?.finalPrice ?? item.price).toFixed(2)} CHF
                             </>
                           )}
                         </button>
                       </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
 
                 {/* Empty State */}
-                {(!currentFoodCategory || !currentFoodCategory.menu_items || currentFoodCategory.menu_items.length === 0) &&
-                 (selectedFoodCategoryId !== "nowaste" || !apiRestaurant?.nowaste_items || apiRestaurant.nowaste_items.length === 0) && (
+                {(!currentFoodCategory || visibleMenuItems.length === 0) &&
+                 (selectedFoodCategoryId !== "nowaste" || visibleNoWasteItems.length === 0) && (
                   <div className="rounded-[22px] border border-dashed border-[#d9cac3] bg-white px-6 py-12 text-center">
                     <ShoppingBag className="mx-auto text-[#c8b6ae]" size={30} />
                     <p className="mt-3 font-bold text-[#5e544f]">No items in this category yet</p>

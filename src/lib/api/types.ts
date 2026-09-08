@@ -11,6 +11,7 @@ export interface RestaurantCategoryItem {
   id: number;
   name: string;
   description: string;
+  icon?: string | null;
 }
 
 // Restaurant types
@@ -34,6 +35,7 @@ export interface RestaurantListItem {
   categories: RestaurantCategoryItem[];
   images: RestaurantImage[];
   openings?: { day: string; start: string; end: string }[];
+  discounts?: PublicRestaurantDiscount[];
 }
 
 export interface MenuFoodCategory {
@@ -41,6 +43,7 @@ export interface MenuFoodCategory {
   name: string;
   description: string;
   image: string | null;
+  icon?: string | null;
   menu_items: MenuItemResponse[];
 }
 
@@ -50,6 +53,17 @@ export interface NoWasteItem {
   description: string;
   price: number;
   image: string | null;
+}
+
+export interface PublicRestaurantDiscount {
+  id: number;
+  name: string;
+  description?: string;
+  active: boolean;
+  price_reduction_percentage: number | null;
+  price_reduction_amount: number | null;
+  price_reduction_min: number | null;
+  menu_items?: { id: number; name: string; description?: string }[];
 }
 
 export interface RestaurantDetailResponse {
@@ -71,9 +85,11 @@ export interface RestaurantDetailResponse {
   open?: boolean;
   images?: RestaurantImage[];
   openings?: { day: string; start: string; end: string }[];
+  discounts?: PublicRestaurantDiscount[];
   categories: RestaurantCategoryResponse[];
   foods: MenuFoodCategory[];
   nowaste_items: NoWasteItem[];
+  upsell_items?: MenuItemResponse[];
   // Legacy support - keep menu_items for backward compatibility
   menu_items?: MenuItemResponse[];
 }
@@ -83,6 +99,7 @@ export interface RestaurantCategoryResponse {
   id: number;
   name: string;
   description: string;
+  icon?: string | null;
 }
 
 // Allergy type
@@ -102,6 +119,7 @@ export interface MenuItemResponse {
   image: string | null;
   options: MenuItemOptionGroupResponse[];
   allergies: (string | AllergyResponse)[];
+  discounts?: PublicRestaurantDiscount[];
   restaurant_id?: number;
   restaurant_name?: string;
   restaurant?: { id: number; name: string };
@@ -455,7 +473,6 @@ export interface RestaurantQueryParams {
   search?: string;
   category?: number;
   delivery?: boolean;
-  pickup?: boolean;
   reviews?: number;
   nowaste?: boolean;
   discounts?: boolean;

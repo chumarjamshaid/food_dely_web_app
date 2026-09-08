@@ -237,6 +237,7 @@ export default function MenuItemEditModal({ item, open, onClose }: Props) {
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
+                placeholder="Chicken sandwich"
                 className="h-11 w-full rounded-lg border border-gray-300 px-3 py-2 text-black"
               />
             </Field>
@@ -247,6 +248,7 @@ export default function MenuItemEditModal({ item, open, onClose }: Props) {
                 min="0"
                 value={price}
                 onChange={(e) => setPrice(e.target.value)}
+                placeholder="12.50"
                 className="h-11 w-full rounded-lg border border-gray-300 px-3 py-2 text-black"
               />
             </Field>
@@ -257,6 +259,7 @@ export default function MenuItemEditModal({ item, open, onClose }: Props) {
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
+              placeholder="Chicken sandwich with crispy lettuce, tomato, and house sauce..."
               rows={3}
               className="w-full border border-gray-300 rounded-lg px-3 py-2 text-black resize-y"
             />
@@ -298,14 +301,14 @@ export default function MenuItemEditModal({ item, open, onClose }: Props) {
               <div className="mt-3 p-3 rounded-lg border border-gray-200 bg-gray-50 space-y-2">
                 <input
                   type="text"
-                  placeholder="Food type name"
+                  placeholder="Food type name, e.g. Sandwiches"
                   value={newFoodName}
                   onChange={(e) => setNewFoodName(e.target.value)}
                   className="w-full border border-gray-300 rounded px-3 py-2 text-black text-sm"
                 />
                 <input
                   type="text"
-                  placeholder="Description (optional)"
+                  placeholder="Description, e.g. Warm handheld lunch favourites..."
                   value={newFoodDescription}
                   onChange={(e) => setNewFoodDescription(e.target.value)}
                   className="w-full border border-gray-300 rounded px-3 py-2 text-black text-sm"

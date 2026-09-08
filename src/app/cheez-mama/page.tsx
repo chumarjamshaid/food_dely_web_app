@@ -1,6 +1,7 @@
 "use client";
 import Image from "next/image";
 import Link from "next/link";
+import LanguageSwitch from "@/components/LanguageSwitch";
 import { useState } from "react";
 import { cartItems as initialCartItems } from "../../data/antiWasteData";
 import { restaurantInfo } from "../../data/chezMamaData";
@@ -126,6 +127,7 @@ export default function ChezMamma() {
             >
               Sign Up
             </Link>
+            <LanguageSwitch theme="light" />
           </div>
         </header>
       </div>

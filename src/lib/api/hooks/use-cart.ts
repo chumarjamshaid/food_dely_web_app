@@ -67,6 +67,26 @@ function hydrateSavedCartOptions(cart: CartResponse): CartResponse {
   };
 }
 
+function preserveCartItemOrder(
+  nextCart: CartResponse,
+  previousCart: CartResponse | undefined,
+): CartResponse {
+  if (!previousCart?.items.length || nextCart.items.length < 2) return nextCart;
+
+  const previousPositions = new Map(
+    previousCart.items.map((item, index) => [item.id, index]),
+  );
+
+  return {
+    ...nextCart,
+    items: [...nextCart.items].sort((left, right) => {
+      const leftPosition = previousPositions.get(left.id) ?? Number.MAX_SAFE_INTEGER;
+      const rightPosition = previousPositions.get(right.id) ?? Number.MAX_SAFE_INTEGER;
+      return leftPosition - rightPosition;
+    }),
+  };
+}
+
 // Fetch current cart
 async function fetchCart(): Promise<CartResponse> {
   try {
@@ -271,8 +291,11 @@ export function useUpdateCartItem() {
       options?: { option: number; item: number }[];
     }) => updateCartItem(cartItem, { quantity, options }),
     onSuccess: (data) => {
-      // Update cart cache with new data
-      queryClient.setQueryData(cartKeys.current(), data);
+      const previousCart = queryClient.getQueryData<CartResponse>(cartKeys.current());
+      queryClient.setQueryData(
+        cartKeys.current(),
+        preserveCartItemOrder(data, previousCart),
+      );
     },
     onError: () => {
       // Refetch cart on error to ensure consistency

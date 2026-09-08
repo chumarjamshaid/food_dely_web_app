@@ -42,6 +42,14 @@ export default function RankingPage() {
   const previewQuery = useRestaurantRankingPreview(charge, !!ownerQuery.data);
   const applyRanking = useApplyRestaurantRanking();
 
+  useEffect(() => {
+    if (!rankingQuery.data) return;
+    const currentCharge = Number(rankingQuery.data.ranking_cost_per_order ?? 0);
+    if (rankingQuery.data.rank_plus_enabled && Number.isFinite(currentCharge)) {
+      setCharge(currentCharge);
+    }
+  }, [rankingQuery.data]);
+
   if (!authChecked || ownerQuery.isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#f7f3ed] text-stone-600">

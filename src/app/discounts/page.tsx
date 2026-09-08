@@ -101,7 +101,7 @@ export default function DiscountsPage() {
             <p className="mb-2 text-xs font-bold uppercase tracking-[0.22em] text-[#c83b2b]">Promotions</p>
             <h1 className="text-3xl font-semibold tracking-[-0.04em] sm:text-4xl">Discounts</h1>
             <p className="mt-3 text-base text-stone-600">
-              Create promotional offers for selected menu items
+              Create menu-item offers or restaurant-wide promotions
             </p>
           </div>
           <button
@@ -202,13 +202,19 @@ function DiscountCard({
       </div>
 
       <div className="text-xs text-gray-500">
-        {discount.menu_items.length} menu item
-        {discount.menu_items.length === 1 ? "" : "s"}:{" "}
-        {discount.menu_items
-          .slice(0, 3)
-          .map((m) => m.name)
-          .join(", ")}
-        {discount.menu_items.length > 3 && " …"}
+        {discount.menu_items.length === 0 ? (
+          <span className="font-semibold text-emerald-700">Restaurant-wide discount</span>
+        ) : (
+          <>
+            {discount.menu_items.length} menu item
+            {discount.menu_items.length === 1 ? "" : "s"}:{" "}
+            {discount.menu_items
+              .slice(0, 3)
+              .map((m) => m.name)
+              .join(", ")}
+            {discount.menu_items.length > 3 && " ..."}
+          </>
+        )}
       </div>
 
       <div className="flex gap-2 mt-1">
@@ -309,10 +315,6 @@ function DiscountEditModal({
       setError("Reduction value must be greater than 0.");
       return;
     }
-    if (selected.length === 0) {
-      setError("Select at least one menu item.");
-      return;
-    }
     const minOrderNum = minOrder.trim() === "" ? null : parseFloat(minOrder);
     const payload: DiscountPayload = {
       name: name.trim(),
@@ -371,6 +373,7 @@ function DiscountEditModal({
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
+              placeholder="Spring promotion"
               className="h-11 w-full rounded-lg border border-gray-300 px-3 py-2 text-black"
             />
           </FieldRow>
@@ -379,6 +382,7 @@ function DiscountEditModal({
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
+              placeholder="Spring promotion for delivery orders..."
               rows={2}
               className="w-full border border-gray-300 rounded-lg px-3 py-2 text-black resize-y"
             />
@@ -431,6 +435,9 @@ function DiscountEditModal({
             <label className="block text-sm font-medium text-black mb-2">
               Menu items ({selected.length} selected)
             </label>
+            <p className="mb-2 text-xs text-gray-500">
+              Leave all menu items unchecked to apply this discount to the whole restaurant.
+            </p>
             <div className="max-h-64 overflow-y-auto rounded-lg border border-gray-200 divide-y divide-gray-100">
               {menuItems.length === 0 && (
                 <p className="px-4 py-6 text-sm text-gray-500 text-center">

@@ -87,6 +87,34 @@ export interface RestaurantOrderListItem {
   delivery_city?: string;
   delivery_phone?: string;
   delivery_email?: string;
+  items?: RestaurantOrderItem[];
+  order_items?: RestaurantOrderItem[];
+  [key: string]: unknown;
+}
+
+export interface RestaurantOrderItem {
+  id?: number;
+  quantity?: number;
+  price?: string | number;
+  total_price?: string | number;
+  menu_item?: {
+    id?: number;
+    name?: string;
+    description?: string;
+  } | null;
+  menu_item_name?: string;
+  name?: string;
+  options?: RestaurantOrderItemOption[];
+  selected_options?: RestaurantOrderItemOption[];
+  [key: string]: unknown;
+}
+
+export interface RestaurantOrderItemOption {
+  id?: number;
+  name?: string;
+  option_name?: string;
+  item_name?: string;
+  price?: string | number;
   [key: string]: unknown;
 }
 
@@ -241,6 +269,7 @@ export interface RestaurantSettingsPayload {
   address: string;
   postal_code: string;
   city: string;
+  address_place_id?: string;
   latitude?: number | null;
   longitude?: number | null;
   meat_origin?: string;

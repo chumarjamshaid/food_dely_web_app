@@ -110,6 +110,7 @@ export {
   foodsKeys,
   menuItemsKeys,
   useCreateFood,
+  useDeleteFood,
   useCreateMenuItem,
   useCreateMenuItemOption,
   useCreateMenuItemOptionItem,

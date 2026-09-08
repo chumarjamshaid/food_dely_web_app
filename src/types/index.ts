@@ -164,6 +164,5 @@ export interface DeliverySettingsData {
   estimated_delivery_time: number;
   min_order: number;
   delivery_time: string;
-  pickup_available: boolean;
   delivery_available: boolean;
 } 

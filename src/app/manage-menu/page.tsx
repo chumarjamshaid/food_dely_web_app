@@ -3,6 +3,7 @@ import MenuItemEditModal from "@/components/MenuItemEditModal";
 import NowasteItemEditModal from "@/components/NowasteItemEditModal";
 import RestaurantManagerHeader from "@/components/RestaurantManagerHeader";
 import {
+  useDeleteFood,
   useFoods,
   useMenuItems,
   useNowasteItems,
@@ -10,6 +11,7 @@ import {
 } from "@/lib/api";
 import type { MenuItem, NowasteItem } from "@/lib/api";
 import { hasAuthToken } from "@/lib/api/client";
+import { extractApiError } from "@/lib/api/error";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
@@ -39,12 +41,14 @@ export default function ManageMenu() {
   const foodsQuery = useFoods(!!ownerQuery.data);
   const menuItemsQuery = useMenuItems(!!ownerQuery.data);
   const nowasteQuery = useNowasteItems(!!ownerQuery.data);
+  const deleteFood = useDeleteFood();
 
   const [selected, setSelected] = useState<SelectedCategory>("all");
   const [editing, setEditing] = useState<MenuItem | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingNowaste, setEditingNowaste] = useState<NowasteItem | null>(null);
   const [nowasteModalOpen, setNowasteModalOpen] = useState(false);
+  const [categoryError, setCategoryError] = useState("");
 
   const foods = foodsQuery.data ?? [];
   const itemsData = menuItemsQuery.data;
@@ -76,6 +80,17 @@ export default function ManageMenu() {
   function openEditNowaste(item: NowasteItem) {
     setEditingNowaste(item);
     setNowasteModalOpen(true);
+  }
+
+  async function removeFoodCategory(id: number, name: string) {
+    if (!confirm(`Delete menu category "${name}"? Menu items in this category may need reassignment.`)) return;
+    setCategoryError("");
+    try {
+      await deleteFood.mutateAsync(id);
+      if (selected === id) setSelected("all");
+    } catch (requestError) {
+      setCategoryError(extractApiError(requestError, "Food category could not be removed."));
+    }
   }
 
   if (!authChecked || ownerQuery.isLoading) {
@@ -134,15 +149,27 @@ export default function ManageMenu() {
             All
           </CategoryPill>
           {foods.map((f) => (
-            <CategoryPill
-              key={f.id}
-              active={selected === f.id}
-              onClick={() => setSelected(f.id)}
-            >
-              {f.name}
-            </CategoryPill>
+            <div key={f.id} className={`flex shrink-0 items-center rounded-full border transition-colors ${selected === f.id ? "border-[#CD3625] bg-[#CD3625] text-white" : "border-gray-300 bg-white text-black"}`}>
+              <button
+                type="button"
+                onClick={() => setSelected(f.id)}
+                className="px-5 py-2 text-sm font-medium"
+              >
+                {f.name}
+              </button>
+              <button
+                type="button"
+                onClick={() => removeFoodCategory(f.id, f.name)}
+                disabled={deleteFood.isPending}
+                aria-label={`Delete ${f.name}`}
+                className={`mr-2 grid size-6 place-items-center rounded-full text-xs font-bold disabled:opacity-50 ${selected === f.id ? "hover:bg-white/15" : "text-red-600 hover:bg-red-50"}`}
+              >
+                ×
+              </button>
+            </div>
           ))}
         </div>
+        {categoryError && <div className="mb-5 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{categoryError}</div>}
 
         {/* Nowaste section */}
         {selected === "nowaste" && (

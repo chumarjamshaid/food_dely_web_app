@@ -11,6 +11,7 @@ import {
 import type { OrderListItem } from "@/lib/api/types";
 import { getOrderRestaurantId, getOrderRestaurantName, getOrderRestaurantNameFromCatalog } from "@/lib/order-restaurant";
 import SafeImage from "@/components/SafeImage";
+import LanguageSwitch from "@/components/LanguageSwitch";
 import { ArrowLeft, PackageCheck, RotateCcw } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -190,7 +191,8 @@ function OrdersPageContent() {
             <span className="text-[#c83b2b]">FOOD</span>DELY
           </Link>
 
-          <div className="flex justify-end">
+          <div className="flex items-center justify-end gap-2">
+            <LanguageSwitch theme="light" />
             <div className="hidden items-center gap-3 sm:flex">
               <Link
                 href="/profile"
@@ -218,7 +220,7 @@ function OrdersPageContent() {
           <h1 className="mt-2 text-3xl font-black tracking-[-0.04em] sm:text-4xl">
             Your orders
           </h1>
-          <p className="mt-2 text-sm text-[#7d716a]">Track active orders and quickly return to your favourites.</p>
+          <p className="mt-2 text-sm text-[#7d716a]">Review your orders and quickly return to your favourites.</p>
         </div>
 
         {ordersLoading ? (
@@ -278,12 +280,6 @@ function OrdersPageContent() {
                       </p>
                     </div>
                     <div className="flex flex-col sm:flex-row gap-2">
-                      <Link
-                        href={`/orders/${order.id}`}
-                        className="flex items-center justify-center rounded-xl border border-[#d9cec8] bg-white px-4 py-2 font-bold text-[#5f554f] transition hover:border-[#c83b2b] hover:text-[#b63825]"
-                      >
-                        Track order
-                      </Link>
                       {/* Only show Cancel while the order is still cancellable (placed or preparing) */}
                       {(() => {
                         const s = (order.status || "").toLowerCase();

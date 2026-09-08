@@ -5,11 +5,13 @@ import {
   useCart,
   useClearCart,
   useConfirmPayment,
+  useCreateAddress,
   useCreatePaymentIntent,
   useRestaurantDetail,
   useValidateCart,
 } from "@/lib/api";
 import SafeImage from "@/components/SafeImage";
+import LanguageSwitch from "@/components/LanguageSwitch";
 import { getCartTotal } from "@/lib/cart-total";
 import { getCartRestaurantId, getCartRestaurantName } from "@/lib/cart-restaurant";
 import { extractApiError } from "@/lib/api/error";
@@ -23,13 +25,12 @@ import {
   CreditCard,
   LockKeyhole,
   MapPin,
-  PackageCheck,
   ShoppingBag,
   Truck,
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 
 // Initialize Stripe
 const stripeKey = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY;
@@ -176,11 +177,15 @@ function PaymentPageContent() {
   // Check if user is authenticated and get profile
   const { isAuthenticated, user, isLoading: isAuthLoading } = useAuth();
   // Fetch user addresses for logged-in users
-  const { data: addresses, isLoading: isAddressesLoading } = useAddresses();
+  const { data: addresses, isLoading: isAddressesLoading } = useAddresses(isAuthenticated);
+  const createAddress = useCreateAddress();
   const router = useRouter();
   const [paymentError, setPaymentError] = useState<string | null>(null);
   const [paymentSuccess, setPaymentSuccess] = useState(false);
   const [clientSecret, setClientSecret] = useState<string | null>(null);
+  const [selectedAddressId, setSelectedAddressId] = useState<string>("current");
+  const [addressNotice, setAddressNotice] = useState<string | null>(null);
+  const didPrefillAddress = useRef(false);
   const createPaymentIntent = useCreatePaymentIntent();
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const cartRestaurantId = getCartRestaurantId(apiCart);
@@ -220,7 +225,9 @@ function PaymentPageContent() {
     }
   }, [apiCart, isCartLoading]);
 
-  const [deliveryType, setDeliveryType] = useState<"delivery" | "pickup">("delivery");
+  // Pickup availability is no longer part of the restaurant API. Checkout is
+  // delivery-only and is controlled solely by `delivery_available`.
+  const deliveryType = "delivery" as const;
 
   const [guestInfo, setGuestInfo] = useState<GuestInfo>({
     firstName: "",
@@ -282,8 +289,8 @@ function PaymentPageContent() {
           }
         }
 
-        if (savedDeliveryType === "delivery" || savedDeliveryType === "pickup") {
-          setDeliveryType(savedDeliveryType);
+        if (savedDeliveryType !== "delivery") {
+          sessionStorage.setItem("checkout_delivery_type", "delivery");
         }
       }
     }
@@ -293,7 +300,7 @@ function PaymentPageContent() {
   useEffect(() => {
     if (isAuthLoading || isAddressesLoading) return;
 
-    if (isAuthenticated && addresses && addresses.length > 0) {
+    if (isAuthenticated && addresses && addresses.length > 0 && !didPrefillAddress.current) {
       // For logged-in users, use their default address or first address
       const defaultAddress = addresses.find((addr) => addr.default) || addresses[0];
       setGuestInfo((prev) => ({
@@ -302,6 +309,8 @@ function PaymentPageContent() {
         postalCode: defaultAddress.postal_code || prev.postalCode,
         city: defaultAddress.city || prev.city,
       }));
+      setSelectedAddressId(String(defaultAddress.id));
+      didPrefillAddress.current = true;
     } else if (!isAuthenticated) {
       // For non-logged-in users, get address from URL query parameter or sessionStorage
       let addressFromUrl = searchParams.get("address");
@@ -353,6 +362,49 @@ function PaymentPageContent() {
       ...prev,
       [field]: value,
     }));
+    if (field === "address" || field === "postalCode" || field === "city") {
+      setSelectedAddressId("current");
+      setAddressNotice(null);
+      setPaymentError(null);
+    }
+  };
+
+  const selectSavedAddress = (addressId: string) => {
+    setSelectedAddressId(addressId);
+    setAddressNotice(null);
+    setPaymentError(null);
+    if (addressId === "current") return;
+    const selected = addresses?.find((address) => String(address.id) === addressId);
+    if (!selected) return;
+    setGuestInfo((prev) => ({
+      ...prev,
+      address: selected.address,
+      postalCode: selected.postal_code,
+      city: selected.city,
+    }));
+  };
+
+  const saveCurrentAddress = () => {
+    if (!guestInfo.address.trim() || !guestInfo.postalCode.trim() || !guestInfo.city.trim()) {
+      setAddressNotice("Enter the full address, city, and postal code before saving it.");
+      return;
+    }
+    setAddressNotice(null);
+    createAddress.mutate(
+      {
+        address: guestInfo.address.trim(),
+        postal_code: guestInfo.postalCode.trim(),
+        city: guestInfo.city.trim(),
+        default: !addresses?.length,
+      },
+      {
+        onSuccess: (savedAddress) => {
+          setSelectedAddressId(String(savedAddress.id));
+          setAddressNotice("Address saved to your account.");
+        },
+        onError: (error) => setAddressNotice(extractApiError(error, "This address could not be saved.")),
+      },
+    );
   };
 
   // Get delivery information
@@ -499,9 +551,24 @@ function PaymentPageContent() {
         }
 
         setPaymentError(errorMessage);
+        const normalizedError = errorMessage.toLowerCase();
 
         // Handle specific error cases based on API documentation error codes
-        if (errorMessage.includes("api.cart_not_found") || errorMessage.includes("cart_not_found")) {
+        if (
+          normalizedError.includes("outside") ||
+          normalizedError.includes("out of range") ||
+          normalizedError.includes("delivery range") ||
+          normalizedError.includes("delivery radius") ||
+          normalizedError.includes("delivery area") ||
+          normalizedError.includes("delivery zone") ||
+          normalizedError.includes("too_far") ||
+          normalizedError.includes("too far") ||
+          normalizedError.includes("not deliver") ||
+          normalizedError.includes("hors zone") ||
+          normalizedError.includes("rayon de livraison")
+        ) {
+          setPaymentError(`Sorry, this address is outside ${restaurantName}'s delivery range. Choose another saved address or enter a different delivery address.`);
+        } else if (errorMessage.includes("api.cart_not_found") || errorMessage.includes("cart_not_found")) {
           setPaymentError("Your cart was not found (404). Please add items to your cart and try again.");
         } else if (errorMessage.includes("api.cart_empty") || errorMessage.includes("cart_empty")) {
           setPaymentError("Your cart is empty (404). Please add items to your cart first.");
@@ -563,7 +630,8 @@ function PaymentPageContent() {
             <span className="text-[#c83b2b]">FOOD</span>DELY
           </Link>
 
-          <div className="flex justify-end">
+          <div className="flex items-center justify-end gap-2">
+            <LanguageSwitch theme="light" />
             <Link href="/cart" className="relative flex h-10 w-10 items-center justify-center rounded-xl bg-[#fff0eb] text-[#b63825] transition hover:bg-[#ffe5dd]">
               <ShoppingBag size={20} />
               {apiCart?.items && apiCart.items.length > 0 && (
@@ -586,7 +654,7 @@ function PaymentPageContent() {
             Complete your order
           </h1>
           <p className="mt-2 text-sm leading-6 text-[#7d716a]">
-            Confirm your details, choose delivery or pickup, and pay securely.
+            Confirm your delivery details and pay securely.
           </p>
           {hasCartItems && (
             <p className="mt-3 text-sm font-black text-[#b63825]">
@@ -620,28 +688,11 @@ function PaymentPageContent() {
                   </div>
                 </div>
               </div>
-              <div className="mb-8 grid grid-cols-2 gap-2 rounded-2xl bg-[#f8f3f0] p-1.5">
-                <button
-                  className={`flex min-h-12 items-center justify-center gap-2 rounded-xl px-4 font-bold transition ${deliveryType === "delivery"
-                    ? "bg-white text-[#b63825] shadow-sm"
-                    : "text-[#766a64] hover:text-[#b63825]"
-                    }`}
-                  onClick={() => setDeliveryType("delivery")}
-                >
+              <div className="mb-8 rounded-2xl bg-[#f8f3f0] p-1.5">
+                <div className="flex min-h-12 items-center justify-center gap-2 rounded-xl bg-white px-4 font-bold text-[#b63825] shadow-sm">
                   <Truck size={18} />
                   Delivery
-                </button>
-                <button
-                  className={`flex min-h-12 items-center justify-center gap-2 rounded-xl px-4 font-bold transition ${deliveryType === "pickup"
-                    ? "bg-white text-[#b63825] shadow-sm"
-                    : "text-[#766a64] hover:text-[#b63825]"
-                    }`}
-                  disabled
-                  title="Pickup checkout is not available yet"
-                >
-                  <PackageCheck size={18} />
-                  Pickup unavailable
-                </button>
+                </div>
               </div>
 
               {/* Guest Checkout Section */}
@@ -709,6 +760,41 @@ function PaymentPageContent() {
                     </div>
                     {deliveryType === "delivery" && (
                       <>
+                        {isAuthenticated && (
+                          <div className="sm:col-span-2 rounded-2xl border border-[#e7ddd8] bg-[#fcfaf9] p-4">
+                            <label htmlFor="saved-address" className="block text-sm font-bold text-[#3e3530]">
+                              Delivery address
+                            </label>
+                            {!!addresses?.length && (
+                              <select
+                                id="saved-address"
+                                value={selectedAddressId}
+                                onChange={(event) => selectSavedAddress(event.target.value)}
+                                className="mt-2 h-12 w-full rounded-xl border border-[#d9cec8] bg-white px-3 text-sm font-semibold text-[#3e3530] outline-none focus:border-[#c83b2b] focus:ring-2 focus:ring-[#c83b2b]/15"
+                              >
+                                {addresses.map((address) => (
+                                  <option key={address.id} value={String(address.id)}>
+                                    {address.default ? "Default · " : ""}{address.address}, {address.postal_code} {address.city}
+                                  </option>
+                                ))}
+                                <option value="current">Use another address</option>
+                              </select>
+                            )}
+                            <div className="mt-3 flex flex-wrap items-center gap-3">
+                              {selectedAddressId === "current" && (
+                                <button
+                                  type="button"
+                                  onClick={saveCurrentAddress}
+                                  disabled={createAddress.isPending}
+                                  className="rounded-xl border border-[#d9cec8] bg-white px-4 py-2 text-sm font-bold text-[#b63825] transition hover:border-[#c83b2b] disabled:opacity-50"
+                                >
+                                  {createAddress.isPending ? "Saving…" : "Save current address"}
+                                </button>
+                              )}
+                              {addressNotice && <p role="status" className="text-sm font-semibold text-[#6d625c]">{addressNotice}</p>}
+                            </div>
+                          </div>
+                        )}
                         <div className="sm:col-span-2">
                           <label className="block text-sm font-medium text-gray-700 mb-1">
                             Delivery Address *

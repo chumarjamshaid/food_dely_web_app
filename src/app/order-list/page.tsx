@@ -1,13 +1,6 @@
 "use client";
 import RestaurantManagerHeader from "@/components/RestaurantManagerHeader";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
   ORDER_STATUS_VALUES,
   useCancelRestaurantOrder,
   useMarkOrderCompleted,
@@ -22,9 +15,9 @@ import {
 import { hasAuthToken } from "@/lib/api/client";
 import { extractApiError } from "@/lib/api/error";
 import * as Popover from "@radix-ui/react-popover";
-import { CalendarDays, MoreHorizontal, SlidersHorizontal } from "lucide-react";
+import { CalendarDays, ChevronDown, Mail, MapPin, Phone, SlidersHorizontal, User } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 
@@ -78,6 +71,18 @@ function orderTotal(order: RestaurantOrderListItem): string {
   return Number.isFinite(n) ? n.toFixed(2) : String(v);
 }
 
+function orderItems(order: RestaurantOrderListItem) {
+  return order.items ?? order.order_items ?? [];
+}
+
+function itemName(item: NonNullable<RestaurantOrderListItem["items"]>[number]) {
+  return item.menu_item?.name ?? item.menu_item_name ?? item.name ?? "Menu item";
+}
+
+function itemOptions(item: NonNullable<RestaurantOrderListItem["items"]>[number]) {
+  return item.options ?? item.selected_options ?? [];
+}
+
 export default function OrderListPage() {
   const router = useRouter();
   const [authChecked, setAuthChecked] = useState(false);
@@ -101,6 +106,8 @@ export default function OrderListPage() {
 
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [status, setStatus] = useState<"all" | RestaurantOrderStatus>("all");
+  const [displayAll, setDisplayAll] = useState(false);
+  const [expandedOrders, setExpandedOrders] = useState<number[]>([]);
 
   const ordersQuery = useRestaurantOrders(
     {
@@ -120,7 +127,12 @@ export default function OrderListPage() {
   const [cancelReason, setCancelReason] = useState("");
   const [actionError, setActionError] = useState("");
 
-  const orders = useMemo(() => ordersQuery.data ?? [], [ordersQuery.data]);
+  const orders = useMemo(() => {
+    const list = ordersQuery.data ?? [];
+    return displayAll
+      ? list
+      : list.filter((order) => (order.status || "").toLowerCase() !== "completed");
+  }, [displayAll, ordersQuery.data]);
 
   if (!authChecked || ownerQuery.isLoading) {
     return (
@@ -199,23 +211,28 @@ export default function OrderListPage() {
                     <label className="block text-gray-700 font-medium mb-1">
                       Status
                     </label>
-                    <Select
+                    <select
                       value={status}
-                      onValueChange={(v) => setStatus(v as typeof status)}
+                      onChange={(e) => setStatus(e.target.value as typeof status)}
+                      className="h-12 w-full rounded-lg border border-gray-300 bg-white px-3 text-sm font-medium text-gray-700"
                     >
-                      <SelectTrigger className="w-full px-3 py-6 bg-white border border-gray-300 text-gray-700 text-sm lg:text-base font-medium rounded-lg">
-                        <SelectValue placeholder="Status" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">All</SelectItem>
-                        {ORDER_STATUS_VALUES.map((s) => (
-                          <SelectItem key={s} value={s}>
-                            {STATUS_LABELS[s]}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                      <option value="all">All active statuses</option>
+                      {ORDER_STATUS_VALUES.map((s) => (
+                        <option key={s} value={s}>
+                          {STATUS_LABELS[s]}
+                        </option>
+                      ))}
+                    </select>
                   </div>
+                  <label className="flex items-center gap-2 rounded-xl border border-stone-200 px-3 py-2 text-sm text-stone-700">
+                    <input
+                      type="checkbox"
+                      checked={displayAll}
+                      onChange={(e) => setDisplayAll(e.target.checked)}
+                      className="h-4 w-4 accent-[#c83b2b]"
+                    />
+                    Display all, including completed orders
+                  </label>
                   <Popover.Arrow className="fill-white" />
                 </Popover.Content>
               </Popover.Portal>
@@ -264,6 +281,8 @@ export default function OrderListPage() {
                 const canDeliver = s === "preparing";
                 const canComplete = s === "ready" || s === "delivering";
                 const canCancel = s === "placed" || s === "preparing";
+                const expanded = expandedOrders.includes(order.id);
+                const items = orderItems(order);
 
                 const dateStr = order.placed || order.created_at || order.date;
                 const displayDate = dateStr
@@ -271,84 +290,92 @@ export default function OrderListPage() {
                   : "—";
 
                 return (
-                  <tr
-                    key={order.id}
-                    className="border-b border-stone-100 bg-white transition last:border-b-0 hover:bg-[#fdfbf8]"
-                  >
-                    <td className="px-6 py-4 font-medium">#{order.id}</td>
-                    <td className="px-6 py-4 font-medium">{displayDate}</td>
-                    <td className="px-6 py-4 font-medium">
-                      {customerName(order)}
-                    </td>
-                    <td className="px-6 py-4"><span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ring-inset ${STATUS_COLORS[s] ?? "bg-stone-100 text-stone-600 ring-stone-200"}`}>{STATUS_LABELS[s] ?? order.status}</span></td>
-                    <td className="px-6 py-4 font-medium">
-                      {orderTotal(order)} CHF
-                    </td>
-                    <td className="px-6 py-4 font-medium">
-                      <Popover.Root>
-                        <Popover.Trigger asChild>
-                          <button className="grid size-9 place-items-center rounded-full border border-stone-200 transition hover:bg-stone-50"><MoreHorizontal size={18} /></button>
-                        </Popover.Trigger>
-                        <Popover.Portal>
-                          <Popover.Content
-                            sideOffset={4}
-                            align="end"
-                            className="z-50 flex min-w-[210px] flex-col rounded-2xl border border-stone-200 bg-white p-2 shadow-xl"
-                          >
-                            {canPrepare && (
-                              <button
-                                onClick={() => { setActionError(""); prepareMut.mutate(order.id, { onError: showActionError }); }}
-                                className="rounded-xl px-3 py-2.5 text-left text-sm hover:bg-stone-50"
-                              >
-                                Mark as Preparing
-                              </button>
+                  <Fragment key={order.id}>
+                    <tr
+                      className="border-b border-stone-100 bg-white transition hover:bg-[#fdfbf8]"
+                    >
+                      <td className="px-6 py-4 font-medium">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setExpandedOrders((prev) =>
+                              prev.includes(order.id)
+                                ? prev.filter((id) => id !== order.id)
+                                : [...prev, order.id],
+                            )
+                          }
+                          className="inline-flex items-center gap-2 text-left font-semibold text-stone-950"
+                        >
+                          <ChevronDown size={16} className={`transition ${expanded ? "rotate-180" : ""}`} />
+                          #{order.id}
+                        </button>
+                      </td>
+                      <td className="px-6 py-4 font-medium">{displayDate}</td>
+                      <td className="px-6 py-4">
+                        <div className="space-y-1 text-xs text-stone-500">
+                          <p className="flex items-center gap-2 text-sm font-semibold text-stone-900"><User size={14} />{customerName(order)}</p>
+                          {order.delivery_phone && <p className="flex items-center gap-2"><Phone size={13} />{order.delivery_phone}</p>}
+                          {order.delivery_email && <p className="flex items-center gap-2"><Mail size={13} />{order.delivery_email}</p>}
+                          {[order.delivery_address, order.delivery_postal_code, order.delivery_city].filter(Boolean).length > 0 && (
+                            <p className="flex items-start gap-2"><MapPin size={13} className="mt-0.5 shrink-0" />{[order.delivery_address, order.delivery_postal_code, order.delivery_city].filter(Boolean).join(", ")}</p>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4"><span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ring-inset ${STATUS_COLORS[s] ?? "bg-stone-100 text-stone-600 ring-stone-200"}`}>{STATUS_LABELS[s] ?? order.status}</span></td>
+                      <td className="px-6 py-4 font-medium">
+                        {orderTotal(order)} CHF
+                      </td>
+                      <td className="px-6 py-4 font-medium">
+                        <div className="flex min-w-[360px] flex-wrap gap-2">
+                          {canPrepare && <button onClick={() => { setActionError(""); prepareMut.mutate(order.id, { onError: showActionError }); }} className="rounded-full border border-stone-300 px-3 py-1.5 text-xs font-semibold hover:bg-stone-50">Preparing</button>}
+                          {canReady && <button onClick={() => { setActionError(""); readyMut.mutate(order.id, { onError: showActionError }); }} className="rounded-full border border-stone-300 px-3 py-1.5 text-xs font-semibold hover:bg-stone-50">Ready</button>}
+                          {canDeliver && <button onClick={() => { setActionError(""); deliverMut.mutate(order.id, { onError: showActionError }); }} className="rounded-full border border-stone-300 px-3 py-1.5 text-xs font-semibold hover:bg-stone-50">Delivering</button>}
+                          {canComplete && <button onClick={() => { setActionError(""); completeMut.mutate(order.id, { onError: showActionError }); }} className="rounded-full bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700">Completed</button>}
+                          {canCancel && <button onClick={() => setCancelTarget(order.id)} className="rounded-full border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50">Cancel</button>}
+                          {!canPrepare && !canReady && !canDeliver && !canComplete && !canCancel && <span className="text-xs text-gray-400">No actions available</span>}
+                        </div>
+                      </td>
+                    </tr>
+                    {expanded && (
+                      <tr className="border-b border-stone-100 bg-[#faf8f5]">
+                        <td colSpan={6} className="px-6 py-5">
+                          <div className="rounded-2xl border border-stone-200 bg-white p-4">
+                            <h3 className="text-sm font-bold text-stone-950">Order contents</h3>
+                            {items.length === 0 ? (
+                              <p className="mt-3 text-sm text-stone-500">No item details were returned for this order.</p>
+                            ) : (
+                              <div className="mt-3 divide-y divide-stone-100">
+                                {items.map((item, idx) => {
+                                  const options = itemOptions(item);
+                                  return (
+                                    <div key={item.id ?? idx} className="py-3 first:pt-0 last:pb-0">
+                                      <div className="flex items-start justify-between gap-4">
+                                        <div>
+                                          <p className="font-semibold text-stone-900">{item.quantity ?? 1}x {itemName(item)}</p>
+                                          {options.length > 0 && (
+                                            <ul className="mt-1 space-y-1 text-xs text-stone-500">
+                                              {options.map((option, optionIdx) => (
+                                                <li key={option.id ?? optionIdx}>
+                                                  {option.option_name ? `${option.option_name}: ` : ""}{option.item_name ?? option.name ?? "Selected option"}
+                                                </li>
+                                              ))}
+                                            </ul>
+                                          )}
+                                        </div>
+                                        {(item.total_price ?? item.price) != null && (
+                                          <span className="text-sm font-semibold text-[#c83b2b]">{String(item.total_price ?? item.price)} CHF</span>
+                                        )}
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
                             )}
-                            {canReady && (
-                              <button
-                                onClick={() => { setActionError(""); readyMut.mutate(order.id, { onError: showActionError }); }}
-                                className="rounded-xl px-3 py-2.5 text-left text-sm hover:bg-stone-50"
-                              >
-                                Mark as Ready
-                              </button>
-                            )}
-                            {canDeliver && (
-                              <button
-                                onClick={() => { setActionError(""); deliverMut.mutate(order.id, { onError: showActionError }); }}
-                                className="rounded-xl px-3 py-2.5 text-left text-sm hover:bg-stone-50"
-                              >
-                                Mark as Delivering
-                              </button>
-                            )}
-                            {canComplete && (
-                              <button
-                                onClick={() => { setActionError(""); completeMut.mutate(order.id, { onError: showActionError }); }}
-                                className="rounded-xl px-3 py-2.5 text-left text-sm hover:bg-stone-50"
-                              >
-                                Mark as Completed
-                              </button>
-                            )}
-                            {canCancel && (
-                              <button
-                                onClick={() => setCancelTarget(order.id)}
-                                className="rounded-xl px-3 py-2.5 text-left text-sm text-red-600 hover:bg-red-50"
-                              >
-                                Cancel order
-                              </button>
-                            )}
-                            {!canPrepare &&
-                              !canReady &&
-                              !canDeliver &&
-                              !canComplete &&
-                              !canCancel && (
-                                <span className="px-3 py-2 text-sm text-gray-400">
-                                  No actions available
-                                </span>
-                              )}
-                          </Popover.Content>
-                        </Popover.Portal>
-                      </Popover.Root>
-                    </td>
-                  </tr>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </Fragment>
                 );
               })}
             </tbody>

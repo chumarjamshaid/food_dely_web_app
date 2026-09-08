@@ -2,6 +2,7 @@
 import RestaurantManagerHeader from "@/components/RestaurantManagerHeader";
 import {
   useCreateRestaurantClosing,
+  useAddressAutocomplete,
   useDeleteRestaurantClosing,
   useDeleteRestaurantImage,
   useRestaurantClosings,
@@ -17,6 +18,7 @@ import {
 import { hasAuthToken } from "@/lib/api/client";
 import { extractApiError } from "@/lib/api/error";
 import type { RestaurantOwnerProfile } from "@/lib/api/types";
+import { Check, LoaderCircle, MapPin } from "lucide-react";
 import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
@@ -168,13 +170,14 @@ function DetailsTab({ restaurant }: { restaurant: RestaurantOwnerProfile }) {
     address: restaurant.address ?? "",
     postal_code: restaurant.postal_code ?? "",
     city: restaurant.city ?? "",
-    latitude: restaurant.latitude != null ? String(restaurant.latitude) : "",
-    longitude: restaurant.longitude != null ? String(restaurant.longitude) : "",
+    address_place_id: "",
     meat_origin: restaurant.meat_origin ?? "",
     fish_origin: restaurant.fish_origin ?? "",
   });
+  const [suggestionsOpen, setSuggestionsOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const addressQuery = useAddressAutocomplete(form.address);
 
   const setField = (k: keyof typeof form, v: string) =>
     setForm((p) => ({ ...p, [k]: v }));
@@ -187,12 +190,6 @@ function DetailsTab({ restaurant }: { restaurant: RestaurantOwnerProfile }) {
       setError("Description must be 200 characters or fewer.");
       return;
     }
-    const latitude = form.latitude.trim() === "" ? null : Number(form.latitude);
-    const longitude = form.longitude.trim() === "" ? null : Number(form.longitude);
-    if ((latitude !== null && (!Number.isFinite(latitude) || latitude < -90 || latitude > 90)) || (longitude !== null && (!Number.isFinite(longitude) || longitude < -180 || longitude > 180))) {
-      setError("Enter valid latitude (-90 to 90) and longitude (-180 to 180).");
-      return;
-    }
     const payload = {
       name: form.name.trim(),
       description: form.description.trim(),
@@ -201,10 +198,9 @@ function DetailsTab({ restaurant }: { restaurant: RestaurantOwnerProfile }) {
       address: form.address.trim(),
       postal_code: form.postal_code.trim(),
       city: form.city.trim(),
+      ...(form.address_place_id ? { address_place_id: form.address_place_id } : {}),
       meat_origin: form.meat_origin.trim(),
       fish_origin: form.fish_origin.trim(),
-      ...(latitude !== null ? { latitude } : {}),
-      ...(longitude !== null ? { longitude } : {}),
     };
     mutation.mutate(payload, {
       onSuccess: () => setSuccess(true),
@@ -224,6 +220,7 @@ function DetailsTab({ restaurant }: { restaurant: RestaurantOwnerProfile }) {
           required
           value={form.name}
           onChange={(v) => setField("name", v)}
+          placeholder="Chez Maria"
         />
         <Field
           label="Phone *"
@@ -231,6 +228,7 @@ function DetailsTab({ restaurant }: { restaurant: RestaurantOwnerProfile }) {
           required
           value={form.phone}
           onChange={(v) => setField("phone", v)}
+          placeholder="+41 44 123 45 67"
         />
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -252,6 +250,7 @@ function DetailsTab({ restaurant }: { restaurant: RestaurantOwnerProfile }) {
           required
           value={form.website}
           onChange={(v) => setField("website", v)}
+          placeholder="https://example-restaurant.ch"
         />
         <div className="md:col-span-2">
           <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -260,6 +259,7 @@ function DetailsTab({ restaurant }: { restaurant: RestaurantOwnerProfile }) {
           <textarea
             value={form.description}
             onChange={(e) => setField("description", e.target.value)}
+            placeholder="Brasserie restaurant in the city centre..."
             rows={3}
             maxLength={200}
             required
@@ -268,48 +268,82 @@ function DetailsTab({ restaurant }: { restaurant: RestaurantOwnerProfile }) {
           <p className="mt-1 text-right text-xs text-gray-400">{form.description.length}/200</p>
         </div>
         <div className="md:col-span-2">
-          <Field
-            label="Address *"
-            required
-            value={form.address}
-            onChange={(v) => setField("address", v)}
-          />
+          <div className="relative">
+            <label className="mb-2 block text-sm font-medium text-gray-700">
+              Address *
+            </label>
+            <div className="flex items-center rounded-lg border border-gray-300 px-4 focus-within:ring-2 focus-within:ring-[#CD3625]">
+              <MapPin size={17} className="mr-2 shrink-0 text-[#CD3625]" />
+              <input
+                required
+                value={form.address}
+                onChange={(event) => {
+                  setField("address", event.target.value);
+                  setField("address_place_id", "");
+                  setSuggestionsOpen(true);
+                }}
+                onFocus={() => setSuggestionsOpen(true)}
+                onKeyDown={(event) => {
+                  if (event.key === "Escape") setSuggestionsOpen(false);
+                }}
+                placeholder="Bahnhofstrasse 10, 8001 Zurich"
+                autoComplete="street-address"
+                className="h-12 min-w-0 flex-1 outline-none"
+              />
+              {addressQuery.isLoading && <LoaderCircle size={17} className="animate-spin text-[#CD3625]" />}
+            </div>
+            {suggestionsOpen && form.address.trim().length >= 3 && (
+              <div className="absolute inset-x-0 top-[calc(100%+8px)] z-30 overflow-hidden rounded-2xl border border-stone-200 bg-white p-2 shadow-2xl">
+                {(addressQuery.data ?? []).length > 0 ? (addressQuery.data ?? []).map((suggestion) => (
+                  <button
+                    key={suggestion.place_id}
+                    type="button"
+                    onClick={() => {
+                      setForm((prev) => ({
+                        ...prev,
+                        address: suggestion.description,
+                        address_place_id: suggestion.place_id,
+                      }));
+                      setSuggestionsOpen(false);
+                    }}
+                    className="flex w-full items-start gap-3 rounded-xl px-3 py-3 text-left text-sm transition hover:bg-[#fff1ed]"
+                  >
+                    <MapPin size={17} className="mt-0.5 shrink-0 text-[#c83b2b]" />
+                    <span className="flex-1 leading-5">{suggestion.description}</span>
+                    {form.address_place_id === suggestion.place_id && <Check size={16} className="mt-0.5 text-emerald-600" />}
+                  </button>
+                )) : !addressQuery.isLoading ? (
+                  <p className="px-3 py-4 text-sm text-stone-500">No matching addresses found.</p>
+                ) : null}
+              </div>
+            )}
+          </div>
         </div>
         <Field
           label="City *"
           required
           value={form.city}
           onChange={(v) => setField("city", v)}
+          placeholder="Zurich"
         />
         <Field
           label="Postal Code *"
           required
           value={form.postal_code}
           onChange={(v) => setField("postal_code", v)}
-        />
-        <Field
-          label="Latitude"
-          type="number"
-          step="any"
-          value={form.latitude}
-          onChange={(v) => setField("latitude", v)}
-        />
-        <Field
-          label="Longitude"
-          type="number"
-          step="any"
-          value={form.longitude}
-          onChange={(v) => setField("longitude", v)}
+          placeholder="8001"
         />
         <Field
           label="Meat origin"
           value={form.meat_origin}
           onChange={(v) => setField("meat_origin", v)}
+          placeholder="Switzerland, France"
         />
         <Field
           label="Fish origin"
           value={form.fish_origin}
           onChange={(v) => setField("fish_origin", v)}
+          placeholder="Norway, Switzerland"
         />
       </div>
 
@@ -692,6 +726,7 @@ function Field({
   type = "text",
   required = false,
   step,
+  placeholder,
 }: {
   label: string;
   value: string;
@@ -699,6 +734,7 @@ function Field({
   type?: string;
   required?: boolean;
   step?: string;
+  placeholder?: string;
 }) {
   return (
     <div>
@@ -710,6 +746,7 @@ function Field({
         required={required}
         step={step}
         value={value}
+        placeholder={placeholder}
         onChange={(e) => onChange(e.target.value)}
         className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#CD3625]"
       />

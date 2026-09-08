@@ -6,8 +6,8 @@ import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import LanguageSwitch from "@/components/LanguageSwitch";
 import { useLanguage } from "@/components/LanguageProvider";
+import LanguageSwitch from "@/components/LanguageSwitch";
 
 const heroImages = [
   "/images/Dashboard-1.png",
@@ -37,8 +37,11 @@ export default function Home() {
   const [address, setAddress] = useState("");
   const [addressError, setAddressError] = useState("");
   const [selectedAddress, setSelectedAddress] = useState("");
+  const [selectedCoords, setSelectedCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [debouncedAddress, setDebouncedAddress] = useState("");
   const [suggestionsOpen, setSuggestionsOpen] = useState(false);
+  const [locationLoading, setLocationLoading] = useState(false);
+  const [locationError, setLocationError] = useState("");
   const addressInputRef = useRef<HTMLInputElement>(null);
   const [heroImage, setHeroImage] = useState(0);
   const [authReady, setAuthReady] = useState(false);
@@ -56,6 +59,7 @@ export default function Home() {
     const storedAddress = sessionStorage.getItem("deliveryAddress") ?? "";
     setAddress(storedAddress);
     setSelectedAddress("");
+    setSelectedCoords(null);
     setSuggestionsOpen(true);
 
     window.requestAnimationFrame(() => {
@@ -88,7 +92,47 @@ export default function Home() {
       return;
     }
     setAddressError("");
-    router.push(`/partners?address=${encodeURIComponent(cleanAddress)}`);
+    const params = new URLSearchParams({ address: cleanAddress });
+    if (selectedCoords) {
+      params.set("lat", String(selectedCoords.lat));
+      params.set("lng", String(selectedCoords.lng));
+    }
+    router.push(`/partners?${params.toString()}`);
+  };
+
+  const useCurrentLocation = () => {
+    setLocationError("");
+    setAddressError("");
+
+    if (!("geolocation" in navigator)) {
+      setLocationError(fr ? "La géolocalisation n’est pas prise en charge par ce navigateur." : "Geolocation is not supported in this browser.");
+      return;
+    }
+
+    setLocationLoading(true);
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const coords = {
+          lat: position.coords.latitude,
+          lng: position.coords.longitude,
+        };
+        const label = fr ? "Ma position actuelle" : "My current location";
+
+        setSelectedCoords(coords);
+        setAddress(label);
+        setSelectedAddress(label);
+        sessionStorage.setItem("deliveryAddress", label);
+        sessionStorage.setItem("deliveryLocationLat", String(coords.lat));
+        sessionStorage.setItem("deliveryLocationLng", String(coords.lng));
+        setSuggestionsOpen(false);
+        setLocationLoading(false);
+      },
+      () => {
+        setLocationLoading(false);
+        setLocationError(fr ? "Nous n’avons pas pu accéder à votre position. Vérifiez l’autorisation du navigateur." : "We couldn’t access your location. Please check the browser permission.");
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 5 * 60 * 1000 },
+    );
   };
 
   return (
@@ -121,7 +165,6 @@ export default function Home() {
           </Link>
 
           <div className="flex items-center gap-2 sm:gap-3">
-          <LanguageSwitch />
           {authReady && !isLoading ? (
             isAuthenticated ? (
               <nav className="flex items-center gap-3 text-sm font-semibold">
@@ -136,6 +179,7 @@ export default function Home() {
               </nav>
             )
           ) : null}
+          <LanguageSwitch />
           </div>
         </header>
 
@@ -158,7 +202,7 @@ export default function Home() {
             </p>
 
             <div id="delivery-address" className="relative mt-9 max-w-2xl scroll-mt-8">
-              <div className="rounded-2xl border border-white/15 bg-white/10 p-2 shadow-2xl shadow-black/25 backdrop-blur-md transition duration-300 focus-within:border-[#ff7868]/60 focus-within:bg-white/[0.14] focus-within:shadow-[#c83b2b]/10 sm:flex sm:items-center">
+            <div className="rounded-2xl border border-white/15 bg-white/10 p-2 shadow-2xl shadow-black/25 backdrop-blur-md transition duration-300 focus-within:border-[#ff7868]/60 focus-within:bg-white/[0.14] focus-within:shadow-[#c83b2b]/10 sm:flex sm:items-center">
               <label className="flex min-w-0 flex-1 items-center gap-3 px-3">
                 <MapPin className="shrink-0 text-[#ff7868]" size={21} aria-hidden="true" />
                 <span className="sr-only">{fr ? "Adresse de livraison" : "Delivery address"}</span>
@@ -168,8 +212,10 @@ export default function Home() {
                   onChange={(event) => {
                     setAddress(event.target.value);
                     setSelectedAddress("");
+                    setSelectedCoords(null);
                     setSuggestionsOpen(true);
                     if (addressError) setAddressError("");
+                    if (locationError) setLocationError("");
                   }}
                   onFocus={() => setSuggestionsOpen(true)}
                   onKeyDown={(event) => {
@@ -181,10 +227,26 @@ export default function Home() {
                 />
               </label>
               {suggestionsLoading && <LoaderCircle size={19} className="mr-2 shrink-0 animate-spin text-[#ff9b8f]" aria-label="Loading address suggestions" />}
-              <button onClick={startOrder} className="group mt-2 flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#c83b2b] px-6 text-sm font-bold text-white transition duration-300 hover:bg-[#af3023] hover:shadow-lg hover:shadow-[#c83b2b]/25 sm:mt-0 sm:w-auto">
-                {fr ? "Trouver un repas" : "Find food"} <ArrowRight size={17} className="transition-transform duration-300 group-hover:translate-x-1" aria-hidden="true" />
-              </button>
+              <div className="mt-2 flex w-full gap-2 sm:mt-0 sm:w-auto">
+                <button
+                  type="button"
+                  onClick={useCurrentLocation}
+                  disabled={locationLoading}
+                  className="flex h-12 flex-1 items-center justify-center gap-2 rounded-xl border border-white/20 bg-white/10 px-4 text-sm font-bold text-white transition duration-300 hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-60 sm:flex-none"
+                >
+                  {locationLoading ? (
+                    <LoaderCircle size={17} className="animate-spin" aria-hidden="true" />
+                  ) : (
+                    <MapPin size={17} aria-hidden="true" />
+                  )}
+                  {fr ? "Position actuelle" : "Current location"}
+                </button>
+                <button onClick={startOrder} className="group flex h-12 flex-1 items-center justify-center gap-2 rounded-xl bg-[#c83b2b] px-6 text-sm font-bold text-white transition duration-300 hover:bg-[#af3023] hover:shadow-lg hover:shadow-[#c83b2b]/25 sm:flex-none">
+                  {fr ? "Trouver un repas" : "Find food"} <ArrowRight size={17} className="transition-transform duration-300 group-hover:translate-x-1" aria-hidden="true" />
+                </button>
               </div>
+              </div>
+              {locationError ? <p role="alert" className="mt-3 text-sm text-[#ff9b8f]">{locationError}</p> : null}
               {suggestionsOpen && debouncedAddress.trim().length >= 3 && (
                 <div className="absolute inset-x-0 top-[calc(100%+8px)] z-30 overflow-hidden rounded-2xl border border-stone-200 bg-white p-2 text-stone-900 shadow-2xl">
                   {addressSuggestions.length > 0 ? addressSuggestions.map((suggestion) => (
@@ -194,6 +256,7 @@ export default function Home() {
                       onClick={() => {
                         setAddress(suggestion.description);
                         setSelectedAddress(suggestion.description);
+                        setSelectedCoords(null);
                         setSuggestionsOpen(false);
                         setAddressError("");
                       }}

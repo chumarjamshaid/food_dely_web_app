@@ -2,6 +2,7 @@ import { QueryProvider } from '@/lib/api/query-provider'
 import { LanguageProvider } from '@/components/LanguageProvider'
 import GlobalLanguageSwitch from '@/components/GlobalLanguageSwitch'
 import AppTranslator from '@/components/AppTranslator'
+import CookieConsent from '@/components/CookieConsent'
 import { type Metadata } from 'next'
 // import { Geist, Geist_Mono } from 'next/font/google'
 import './globals.css'
@@ -39,6 +40,7 @@ export default function RootLayout({
             <AppTranslator />
             <GlobalLanguageSwitch />
             {children}
+            <CookieConsent />
           </LanguageProvider>
         </QueryProvider>
       </body>

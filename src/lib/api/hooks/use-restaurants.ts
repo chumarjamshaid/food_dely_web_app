@@ -1,4 +1,4 @@
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, keepPreviousData } from "@tanstack/react-query";
 import { apiClient } from "../client";
 import type {
   RestaurantDetailResponse,
@@ -50,6 +50,7 @@ export function useRestaurants(params?: RestaurantQueryParams) {
   return useQuery({
     queryKey: restaurantKeys.list(params || {}),
     queryFn: () => fetchRestaurants(params),
+    placeholderData: keepPreviousData,
   });
 }
 

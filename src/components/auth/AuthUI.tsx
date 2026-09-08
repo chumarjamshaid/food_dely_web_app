@@ -3,6 +3,7 @@
 import { ArrowLeft, Check, Eye, EyeOff, ShieldCheck } from "lucide-react";
 import { getCountries, getCountryCallingCode, type CountryCode } from "libphonenumber-js";
 import Link from "next/link";
+import LanguageSwitch from "@/components/LanguageSwitch";
 import { useEffect, useMemo, useState, type InputHTMLAttributes, type ReactNode } from "react";
 
 export const authInputClass =
@@ -80,9 +81,16 @@ export function AuthShell({
             <Link href="/" className="font-serif text-2xl font-black tracking-tight">
               <span className="text-[#c83b2b]">FOOD</span>DELY
             </Link>
-            <Link href="/" className="grid h-10 w-10 place-items-center rounded-full border border-stone-200 bg-white text-stone-700" aria-label="Back to home">
-              <ArrowLeft size={18} aria-hidden="true" />
-            </Link>
+            <div className="flex items-center gap-2">
+              <LanguageSwitch theme="light" />
+              <Link href="/" className="grid h-10 w-10 place-items-center rounded-full border border-stone-200 bg-white text-stone-700" aria-label="Back to home">
+                <ArrowLeft size={18} aria-hidden="true" />
+              </Link>
+            </div>
+          </div>
+
+          <div className="mb-5 hidden justify-end lg:flex">
+            <LanguageSwitch theme="light" />
           </div>
 
           <header className={compactDesktop ? "mb-5" : "mb-7"}>

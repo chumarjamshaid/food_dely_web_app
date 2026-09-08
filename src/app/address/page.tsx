@@ -8,6 +8,7 @@ import {
   useUpdateAddress,
 } from "@/lib/api";
 import { extractAuthError } from "@/lib/api/error";
+import LanguageSwitch from "@/components/LanguageSwitch";
 import {
   ArrowLeft,
   Check,
@@ -169,12 +170,12 @@ export default function AddressPage() {
           <Link href="/" className="text-xl font-black tracking-tight">
             <span className="text-[#c83f28]">FOOD</span>DELY
           </Link>
-          <Link
-            href="/profile"
-            className="rounded-xl px-3 py-2 text-sm font-semibold transition hover:bg-[#f7f1ee]"
-          >
-            Profile
-          </Link>
+          <div className="flex items-center gap-2">
+            <Link href="/profile" className="hidden rounded-xl px-3 py-2 text-sm font-semibold transition hover:bg-[#f7f1ee] sm:block">
+              Profile
+            </Link>
+            <LanguageSwitch theme="light" />
+          </div>
         </div>
       </header>
 

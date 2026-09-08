@@ -1,8 +1,10 @@
 "use client";
 
 import SafeImage from "@/components/SafeImage";
+import LanguageSwitch from "@/components/LanguageSwitch";
 import {
   useCart,
+  useAddToCart,
   useApplyPromoCode,
   useRemoveFromCart,
   useRemovePromoCode,
@@ -34,6 +36,8 @@ export default function CartPage() {
   const { data: cart, isLoading, error: cartError, refetch } = useCart();
   const removeItem = useRemoveFromCart();
   const updateItem = useUpdateCartItem();
+  const addItem = useAddToCart();
+  const [addingUpsellId, setAddingUpsellId] = useState<number | null>(null);
   const [actionItemId, setActionItemId] = useState<number | null>(null);
   const [actionError, setActionError] = useState("");
   const [promoCode, setPromoCode] = useState("");
@@ -43,6 +47,21 @@ export default function CartPage() {
   const cartRestaurantId = getCartRestaurantId(cart);
   const { data: cartRestaurant } = useRestaurantDetail(cartRestaurantId ?? 0);
   const restaurantName = getCartRestaurantName(cart) || cartRestaurant?.name || "Restaurant";
+  const restaurantHref = cartRestaurantId ? `/partners/${cartRestaurantId}` : null;
+  const cartMenuItemIds = new Set(cart?.items.flatMap((item) => item.menu_item ? [item.menu_item.id] : []));
+  const upsellItems = (cartRestaurant?.upsell_items ?? []).filter((item) => !cartMenuItemIds.has(item.id));
+
+  const addUpsellItem = (menuItemId: number) => {
+    setActionError("");
+    setAddingUpsellId(menuItemId);
+    addItem.mutate(
+      { menu_item: menuItemId, quantity: 1 },
+      {
+        onError: (error) => setActionError(extractAuthError(error, "This item could not be added.")),
+        onSettled: () => setAddingUpsellId(null),
+      },
+    );
+  };
 
   useEffect(() => {
     if (cart?.items.length === 0) clearCartRestaurantId();
@@ -130,7 +149,7 @@ export default function CartPage() {
   return (
     <main className="min-h-screen bg-[#fbfaf8] text-[#241f1c]">
       <header className="border-b border-[#ece3de] bg-white/90 backdrop-blur-xl">
-        <div className="mx-auto flex min-h-[72px] max-w-6xl items-center justify-between px-4 sm:px-8">
+        <div className="mx-auto flex min-h-[64px] max-w-6xl items-center justify-between gap-2 px-3 sm:min-h-[72px] sm:px-8">
           <Link
             href="/partners"
             className="inline-flex items-center gap-2 rounded-xl px-2 py-2 text-sm font-bold text-[#665b55] transition hover:bg-[#f7f1ee] hover:text-[#b63825]"
@@ -141,13 +160,16 @@ export default function CartPage() {
           <Link href="/" className="text-[24px] font-black tracking-[-0.04em]">
             <span className="text-[#c83b2b]">FOOD</span>DELY
           </Link>
-          <div className="relative flex h-10 w-10 items-center justify-center rounded-xl bg-[#fff0eb] text-[#b63825]">
-            <ShoppingBag size={20} />
-            {itemCount > 0 && (
-              <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-[#c83b2b] px-1 text-[10px] font-black text-white">
-                {itemCount}
-              </span>
-            )}
+          <div className="flex shrink-0 items-center gap-0.5 sm:gap-2">
+            <div className="relative flex h-8 w-8 items-center justify-center rounded-lg bg-[#fff0eb] text-[#b63825] sm:h-10 sm:w-10 sm:rounded-xl">
+              <ShoppingBag size={18} />
+              {itemCount > 0 && (
+                <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-[#c83b2b] px-1 text-[10px] font-black text-white">
+                  {itemCount}
+                </span>
+              )}
+            </div>
+            <LanguageSwitch theme="light" />
           </div>
         </div>
       </header>
@@ -165,7 +187,12 @@ export default function CartPage() {
           </p>
           {!!cart?.items.length && (
             <p className="mt-3 text-sm font-black text-[#b63825]">
-              Restaurant: {restaurantName}
+              Restaurant:{" "}
+              {restaurantHref ? (
+                <Link href={restaurantHref} className="underline decoration-[#b63825]/35 underline-offset-4 transition hover:decoration-current focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#c83b2b]/30">
+                  {restaurantName}
+                </Link>
+              ) : restaurantName}
             </p>
           )}
         </div>
@@ -258,24 +285,15 @@ export default function CartPage() {
                             Customized · {cartItem.options.length}{" "}
                             {cartItem.options.length === 1 ? "option" : "options"}
                           </p>
-                          {editableOptionGroups.length ? (
-                            <button
-                              type="button"
-                              onClick={() => setEditingItem({
-                                ...cartItem,
-                                menu_item: cartItem.menu_item
-                                  ? { ...cartItem.menu_item, options: editableOptionGroups }
-                                  : undefined,
-                              })}
-                              disabled={isPending}
-                              className="inline-flex items-center gap-1 rounded-lg bg-[#fff0eb] px-2.5 py-1 text-xs font-bold text-[#b63825] transition hover:bg-[#fbe1d9] disabled:opacity-50"
-                            >
-                              <Pencil size={12} /> Edit options
-                            </button>
-                          ) : null}
                         </div>
                       )}
-                      {!cartItem.options?.length && editableOptionGroups.length ? (
+                    </div>
+
+                    <div className="col-span-2 flex flex-wrap items-center justify-between gap-3 border-t border-[#eee6e2] pt-4 sm:col-span-1 sm:flex-col sm:items-end sm:border-0 sm:pt-0">
+                      <p className="text-lg font-black">
+                        {(Number(item.price) * cartItem.quantity).toFixed(2)} CHF
+                      </p>
+                      {editableOptionGroups.length ? (
                         <button
                           type="button"
                           onClick={() => setEditingItem({
@@ -285,17 +303,12 @@ export default function CartPage() {
                               : undefined,
                           })}
                           disabled={isPending}
-                          className="mt-2 inline-flex items-center gap-1 rounded-lg bg-[#fff0eb] px-2.5 py-1 text-xs font-bold text-[#b63825] transition hover:bg-[#fbe1d9] disabled:opacity-50"
+                          className="order-3 flex min-h-10 w-full items-center justify-center gap-2 rounded-xl border border-[#efd5cd] bg-[#fff0eb] px-3 text-xs font-bold text-[#b63825] transition hover:bg-[#fbe1d9] disabled:opacity-50 sm:order-none sm:w-auto"
                         >
-                          <Pencil size={12} /> Choose options
+                          <Pencil size={14} />
+                          {cartItem.options?.length ? "Edit options" : "Choose options"}
                         </button>
                       ) : null}
-                    </div>
-
-                    <div className="col-span-2 flex items-center justify-between gap-4 border-t border-[#eee6e2] pt-4 sm:col-span-1 sm:flex-col sm:items-end sm:border-0 sm:pt-0">
-                      <p className="text-lg font-black">
-                        {(Number(item.price) * cartItem.quantity).toFixed(2)} CHF
-                      </p>
                       <div className="flex items-center gap-2">
                         <div className="flex h-10 items-center rounded-xl border border-[#ddd2cc] bg-[#fbf8f6]">
                           <button
@@ -345,13 +358,41 @@ export default function CartPage() {
                   </article>
                 );
               })}
+              {!!upsellItems.length && (
+                <div className="pt-5">
+                  <p className="text-xs font-bold uppercase tracking-[0.17em] text-[#b63825]">Complete your order</p>
+                  <h2 className="mt-1 text-xl font-black">You may also like</h2>
+                  <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                    {upsellItems.map((item) => (
+                      <article key={item.id} className="flex items-center gap-3 rounded-2xl border border-[#e9dfda] bg-white p-3">
+                        <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-xl bg-[#fff8f5]">
+                          <SafeImage src={item.image} alt={item.name} fill sizes="64px" className="object-cover" fallbackClassName="object-contain p-3" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-black">{item.name}</p>
+                          <p className="mt-1 text-xs font-bold text-[#b63825]">{Number(item.price).toFixed(2)} CHF</p>
+                        </div>
+                        <button type="button" aria-label={`Add ${item.name}`} disabled={addingUpsellId === item.id} onClick={() => addUpsellItem(item.id)} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#fff0eb] text-[#b63825] transition hover:bg-[#fbe1d9] disabled:opacity-50">
+                          {addingUpsellId === item.id ? <LoaderCircle size={17} className="animate-spin" /> : <Plus size={18} />}
+                        </button>
+                      </article>
+                    ))}
+                  </div>
+                </div>
+              )}
             </section>
 
             <aside className="rounded-[24px] border border-[#e4d8d2] bg-[#241b18] p-6 text-white shadow-[0_22px_55px_rgba(42,28,22,0.18)] lg:sticky lg:top-6">
               <p className="text-xs font-bold uppercase tracking-[0.17em] text-[#ff9b8f]">
                 Order summary
               </p>
-              <p className="mt-2 text-sm font-black text-white">{restaurantName}</p>
+              {restaurantHref ? (
+                <Link href={restaurantHref} className="mt-2 inline-flex text-sm font-black text-white underline decoration-white/30 underline-offset-4 transition hover:decoration-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40">
+                  {restaurantName}
+                </Link>
+              ) : (
+                <p className="mt-2 text-sm font-black text-white">{restaurantName}</p>
+              )}
               <div className="mt-5 flex items-center justify-between border-b border-white/10 pb-5 text-sm text-stone-300">
                 <span>
                   {itemCount} {itemCount === 1 ? "item" : "items"}
