@@ -106,6 +106,9 @@ export interface RestaurantOrderItem {
   name?: string;
   options?: RestaurantOrderItemOption[];
   selected_options?: RestaurantOrderItemOption[];
+  menu_item_options?: RestaurantOrderItemOption[];
+  order_item_options?: RestaurantOrderItemOption[];
+  option_items?: RestaurantOrderItemOption[];
   [key: string]: unknown;
 }
 

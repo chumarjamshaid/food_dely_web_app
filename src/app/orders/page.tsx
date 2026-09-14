@@ -1,6 +1,5 @@
 "use client";
 import {
-  useAddToCart,
   useAuth,
   useCancelOrder,
   useLogout,
@@ -12,7 +11,7 @@ import type { OrderListItem } from "@/lib/api/types";
 import { getOrderRestaurantId, getOrderRestaurantName, getOrderRestaurantNameFromCatalog } from "@/lib/order-restaurant";
 import SafeImage from "@/components/SafeImage";
 import LanguageSwitch from "@/components/LanguageSwitch";
-import { ArrowLeft, PackageCheck, RotateCcw } from "lucide-react";
+import { ArrowLeft, PackageCheck } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
@@ -24,10 +23,8 @@ function OrdersPageContent() {
   const { data: orders, isLoading: ordersLoading, error } = useOrders();
   const { data: restaurantCatalog } = useRestaurantCatalog();
   const cancelOrderMutation = useCancelOrder();
-  const addToCartMutation = useAddToCart();
 
   const [cancellingOrderId, setCancellingOrderId] = useState<number | null>(null);
-  const [reorderingOrderId, setReorderingOrderId] = useState<number | null>(null);
   const [showCancelDialog, setShowCancelDialog] = useState<number | null>(null);
   const [cancelReason, setCancelReason] = useState("");
 
@@ -62,44 +59,6 @@ function OrdersPageContent() {
         },
       }
     );
-  };
-
-  const handleReorder = async (order: OrderListItem) => {
-    setReorderingOrderId(order.id);
-
-    try {
-      // Add all items from the order back to cart
-      const addPromises = order.items.map((item) => {
-        if (item.menu_item) {
-          // Format options if they exist
-          const options = item.options?.map((opt) => ({
-            option: opt.option,
-            item: Array.isArray(opt.menu_item_option_item)
-              ? opt.menu_item_option_item[0]
-              : opt.menu_item_option_item,
-          }));
-
-          return addToCartMutation.mutateAsync({
-            quantity: item.quantity,
-            menu_item: item.menu_item.id,
-            options: options,
-          });
-        } else if (item.nowaste_item) {
-          return addToCartMutation.mutateAsync({
-            quantity: item.quantity,
-            nowaste_item: item.nowaste_item.id,
-          });
-        }
-        return Promise.resolve();
-      });
-
-      await Promise.all(addPromises);
-      setReorderingOrderId(null);
-      router.push("/payment");
-    } catch {
-      setReorderingOrderId(null);
-      alert("Failed to add items to cart. Please try again.");
-    }
   };
 
   /** True if the order is cancelled (API may return "Canceled Customer", "Cancelled", etc.) */
@@ -293,14 +252,6 @@ function OrdersPageContent() {
                           {cancellingOrderId === order.id ? "Cancelling..." : "Cancel Order"}
                         </button>
                       )}
-                      <button
-                        onClick={() => handleReorder(order)}
-                        disabled={reorderingOrderId === order.id}
-                        className="flex items-center justify-center gap-2 rounded-xl bg-[#c83b2b] px-4 py-2 font-bold text-white transition hover:bg-[#ad321f] disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        <RotateCcw size={15} />
-                        {reorderingOrderId === order.id ? "Adding to Cart..." : "Reorder"}
-                      </button>
                     </div>
                   </div>
                 </div>
@@ -314,7 +265,7 @@ function OrdersPageContent() {
                       if (!itemData) return null;
 
                       // Use item.price if available, otherwise fall back to itemData.price
-                      const unitPrice = item.price ?? itemData.price ?? 0;
+                      const unitPrice = Number(item.price ?? itemData.price ?? 0);
                       const totalPrice = unitPrice * item.quantity;
 
                       return (

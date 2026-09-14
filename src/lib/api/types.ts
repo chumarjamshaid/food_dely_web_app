@@ -230,6 +230,7 @@ export interface RestaurantRegisterData {
   firstname: string;
   lastname: string;
   address: string;
+  address_place_id?: string;
   city: string;
   postal_code: string;
   email: string;
@@ -348,7 +349,10 @@ export interface OrderItem {
   };
   quantity: number;
   options?: CartItemOptionResponse[];
-  price: number;
+  price?: number | string;
+  unit_price?: number | string;
+  line_total?: number | string;
+  total_price?: number | string;
   restaurant_id?: number;
   restaurant_name?: string;
   restaurant?: { id: number; name: string };
@@ -410,6 +414,7 @@ export interface CancelOrderRequest {
 
 // Payment types
 export interface PaymentIntentRequest {
+  fulfilment_type?: "delivery" | "pickup";
   delivery_firstname?: string;
   delivery_lastname?: string;
   delivery_address?: string;

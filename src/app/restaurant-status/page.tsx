@@ -5,6 +5,7 @@ import { hasAuthToken } from "@/lib/api/client";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
+import LoadingSpinner from "@/components/LoadingSpinner";
 
 export default function RestaurantStatusPage() {
   const router = useRouter();
@@ -20,7 +21,7 @@ export default function RestaurantStatusPage() {
     if (owner.data?.validation_status === "approved" && owner.data.active) router.replace("/dashboard");
   }, [owner.data?.active, owner.data?.validation_status, router]);
 
-  if (!tokenPresent || owner.isLoading) return <main className="min-h-screen grid place-items-center text-gray-600">Checking restaurant status…</main>;
+  if (!tokenPresent || owner.isLoading) return <LoadingSpinner label="Checking restaurant status…" fullScreen />;
 
   const restaurant = owner.data;
   const declined = restaurant?.validation_status === "declined";

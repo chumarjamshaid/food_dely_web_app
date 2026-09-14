@@ -28,42 +28,23 @@ async function createPaymentIntent(
     formData.append("data", JSON.stringify({}));
   }
 
-  try {
-    // For anonymous users, include session_id as query parameter
-    const sessionId = !isAuthenticated() ? getOrCreateSessionId() : null;
-    const params = sessionId ? { session_id: sessionId } : undefined;
+  // For anonymous users, include session_id as query parameter
+  const sessionId = !isAuthenticated() ? getOrCreateSessionId() : null;
+  const params = sessionId ? { session_id: sessionId } : undefined;
 
-    // Explicitly set Content-Type to multipart/form-data (axios will add boundary)
-    // This overrides the default 'application/json' header from apiClient
-    const response = await apiClient.post<PaymentIntentResponse>(
-      "/api/app/payment/intent/",
-      formData,
-      {
-        params,
-        headers: {
-          "Content-Type": "multipart/form-data",
-        },
-      }
-    );
-    return response.data;
-  } catch (error) {
-    if (error && typeof error === "object" && "response" in error) {
-      const axiosError = error as { response?: { data?: unknown; status?: number } };
-
-      // Check for cart_invalid error specifically
-      const responseData = axiosError.response?.data;
-      if (responseData && typeof responseData === 'object') {
-        const dataObj = responseData as Record<string, unknown>;
-        const errorMessage = String(dataObj.error || dataObj.message || '');
-
-        if (errorMessage.includes('cart_invalid')) {
-          // Throw a more helpful error
-          throw new Error("CART_INVALID: Your cart appears to be corrupted. Please clear your cart and add items again.");
-        }
-      }
+  // Let the original API error propagate unchanged so checkout can display the
+  // backend's exact translated message or untranslated translation key.
+  const response = await apiClient.post<PaymentIntentResponse>(
+    "/api/app/payment/intent/",
+    formData,
+    {
+      params,
+      headers: {
+        "Content-Type": "multipart/form-data",
+      },
     }
-    throw error;
-  }
+  );
+  return response.data;
 }
 
 // Confirm payment

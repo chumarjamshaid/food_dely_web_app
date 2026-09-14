@@ -32,6 +32,7 @@ import Link from "next/link";
 import { getTodayOpeningHours } from "@/lib/opening-hours";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useRef, useState } from "react";
+import { getBrowserLocation } from "@/lib/browser-location";
 
 function normalizeSearchText(value: string | null | undefined) {
   return (value ?? "")
@@ -71,6 +72,8 @@ function RestaurantListPage() {
   const [changingLocation, setChangingLocation] = useState(false);
   const [locationSearch, setLocationSearch] = useState("");
   const [debouncedLocationSearch, setDebouncedLocationSearch] = useState("");
+  const [currentLocationLoading, setCurrentLocationLoading] = useState(false);
+  const [currentLocationError, setCurrentLocationError] = useState("");
   const searchInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -81,8 +84,35 @@ function RestaurantListPage() {
     return () => window.clearTimeout(timer);
   }, [locationSearch]);
 
-  const { data: locationSuggestions = [], isFetching: locationLoading } =
+  const { data: locationSuggestions = [], isFetching: locationSuggestionsLoading } =
     useAddressAutocomplete(changingLocation ? debouncedLocationSearch : "");
+
+  const useCurrentLocation = async () => {
+    setCurrentLocationError("");
+    setCurrentLocationLoading(true);
+    try {
+      const coords = await getBrowserLocation();
+      const label = "My current location";
+      setDeliveryAddress(label);
+      setDeliveryLat(coords.lat);
+      setDeliveryLng(coords.lng);
+      sessionStorage.setItem("deliveryAddress", label);
+      sessionStorage.setItem("deliveryLocationLat", String(coords.lat));
+      sessionStorage.setItem("deliveryLocationLng", String(coords.lng));
+      const url = new URL(window.location.href);
+      url.searchParams.set("address", label);
+      url.searchParams.set("lat", String(coords.lat));
+      url.searchParams.set("lng", String(coords.lng));
+      window.history.replaceState(null, "", url.toString());
+      setChangingLocation(false);
+      setLocationSearch("");
+      setSearch("");
+    } catch (error) {
+      setCurrentLocationError(error instanceof Error ? error.message : "We couldn’t access your location. Please try again.");
+    } finally {
+      setCurrentLocationLoading(false);
+    }
+  };
 
   useEffect(() => {
     const addressFromUrl = searchParams.get("address")?.trim();
@@ -103,12 +133,14 @@ function RestaurantListPage() {
     }
 
     const storedAddress = sessionStorage.getItem("deliveryAddress")?.trim();
-    const storedLat = Number(sessionStorage.getItem("deliveryLocationLat"));
-    const storedLng = Number(sessionStorage.getItem("deliveryLocationLng"));
+    const storedLatValue = sessionStorage.getItem("deliveryLocationLat");
+    const storedLngValue = sessionStorage.getItem("deliveryLocationLng");
+    const storedLat = storedLatValue === null ? null : Number(storedLatValue);
+    const storedLng = storedLngValue === null ? null : Number(storedLngValue);
     if (storedAddress) {
       setDeliveryAddress(storedAddress);
-      setDeliveryLat(Number.isFinite(storedLat) ? storedLat : null);
-      setDeliveryLng(Number.isFinite(storedLng) ? storedLng : null);
+      setDeliveryLat(storedLat !== null && Number.isFinite(storedLat) ? storedLat : null);
+      setDeliveryLng(storedLng !== null && Number.isFinite(storedLng) ? storedLng : null);
       return;
     }
 
@@ -134,7 +166,7 @@ function RestaurantListPage() {
   const searchTerms = normalizeSearchText(search).split(" ").filter(Boolean);
   const activeHighlightLabel =
     highlight === "rating"
-      ? "Highly rated"
+      ? "Places with deals"
       : highlight === "free-delivery"
         ? "Free delivery"
         : highlight === "nowaste"
@@ -143,7 +175,7 @@ function RestaurantListPage() {
   const quickFilters = [
     { value: "open", label: "Open now", icon: <Clock3 size={16} className="text-[#4b9b60]" /> },
     { value: "delivery", label: "Delivery", icon: <Bike size={16} className="text-[#d87836]" /> },
-    { value: "rating", label: "Deals", icon: <Tag size={16} className="text-[#f0a52f]" /> },
+    { value: "rating", label: "Places with deals", icon: <Tag size={16} className="text-[#f0a52f]" /> },
     { value: "nowaste", label: "NoWaste", icon: <Leaf size={16} className="text-[#58a56b]" /> },
   ] as const;
   const filteredRestaurants = restaurants.filter((restaurant) => {
@@ -260,7 +292,7 @@ function RestaurantListPage() {
                 autoComplete={changingLocation ? "street-address" : "off"}
                 className="min-w-0 flex-1 bg-transparent text-base outline-none placeholder:text-stone-400"
               />
-              {changingLocation && locationLoading && <LoaderCircle size={18} className="animate-spin text-[#c83b2b]" />}
+              {changingLocation && locationSuggestionsLoading && <LoaderCircle size={18} className="animate-spin text-[#c83b2b]" />}
               {(changingLocation || search) && (
                 <button
                   type="button"
@@ -280,6 +312,19 @@ function RestaurantListPage() {
             )}
             </label>
 
+            {changingLocation && (
+              <button
+                type="button"
+                onClick={useCurrentLocation}
+                disabled={currentLocationLoading}
+                className="mt-3 inline-flex h-10 items-center gap-2 rounded-xl bg-[#fff1ed] px-4 text-sm font-bold text-[#b63825] transition hover:bg-[#ffe5de] disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {currentLocationLoading ? <LoaderCircle size={17} className="animate-spin" /> : <MapPin size={17} />}
+                Use my current location
+              </button>
+            )}
+            {currentLocationError && <p role="alert" className="mt-2 text-sm text-red-700">{currentLocationError}</p>}
+
             {changingLocation && debouncedLocationSearch.trim().length >= 3 && (
               <div className="absolute inset-x-0 top-[calc(100%+8px)] z-40 overflow-hidden rounded-2xl border border-[#e4d9d3] bg-white p-2 shadow-2xl">
                 {locationSuggestions.length > 0 ? locationSuggestions.map((suggestion) => (
@@ -288,9 +333,15 @@ function RestaurantListPage() {
                     type="button"
                     onClick={() => {
                       setDeliveryAddress(suggestion.description);
+                      setDeliveryLat(null);
+                      setDeliveryLng(null);
                       sessionStorage.setItem("deliveryAddress", suggestion.description);
+                      sessionStorage.removeItem("deliveryLocationLat");
+                      sessionStorage.removeItem("deliveryLocationLng");
                       const url = new URL(window.location.href);
                       url.searchParams.set("address", suggestion.description);
+                      url.searchParams.delete("lat");
+                      url.searchParams.delete("lng");
                       window.history.replaceState(null, "", url.toString());
                       setChangingLocation(false);
                       setLocationSearch("");
@@ -302,7 +353,7 @@ function RestaurantListPage() {
                     <span className="flex-1 leading-5">{suggestion.description}</span>
                     {deliveryAddress === suggestion.description && <Check size={16} className="mt-0.5 text-emerald-600" />}
                   </button>
-                )) : !locationLoading ? (
+                )) : !locationSuggestionsLoading ? (
                   <p className="px-3 py-4 text-sm text-stone-500">No matching addresses found.</p>
                 ) : null}
               </div>
@@ -357,7 +408,22 @@ function RestaurantListPage() {
           <div className="scrollbar-hide flex gap-3 overflow-x-auto pb-2 lg:justify-center">
             <button type="button" onClick={() => setCategory(null)} className={`shrink-0 rounded-full px-5 py-2.5 text-xs font-bold transition ${category === null ? "bg-[#241b18] text-white shadow-sm" : "border border-[#e3d8d2] bg-white text-[#665b55] hover:border-[#c83b2b]"}`}>All cuisines</button>
             {!categoriesLoading && categories?.slice(0, showAllCategories ? undefined : 7).map((item) => (
-              <button key={item.id} type="button" onClick={() => setCategory(item.id)} className={`shrink-0 rounded-full px-5 py-2.5 text-xs font-bold transition ${category === item.id ? "bg-[#c83b2b] text-white shadow-sm" : "border border-[#e3d8d2] bg-white text-[#665b55] hover:border-[#c83b2b]"}`}>{item.name}</button>
+              <button key={item.id} type="button" onClick={() => setCategory(item.id)} className={`inline-flex shrink-0 items-center gap-2 rounded-full px-5 py-2.5 text-xs font-bold transition ${category === item.id ? "bg-[#c83b2b] text-white shadow-sm" : "border border-[#e3d8d2] bg-white text-[#665b55] hover:border-[#c83b2b]"}`}>
+                {item.icon && (
+                  <SafeImage
+                    src={item.icon}
+                    alt=""
+                    aria-hidden="true"
+                    width={20}
+                    height={20}
+                    unoptimized
+                    fallbackSrc="/images/Food.png"
+                    className="h-5 w-5 shrink-0 object-contain"
+                    fallbackClassName="object-contain"
+                  />
+                )}
+                <span>{item.name}</span>
+              </button>
             ))}
             <button type="button" onClick={() => setShowAllCategories((current) => !current)} className="inline-flex shrink-0 items-center gap-2 rounded-full border border-[#e3d8d2] bg-white px-5 py-2.5 text-xs font-bold text-[#665b55] transition hover:border-[#c83b2b]">
               {showAllCategories ? "Less" : "More"} <span aria-hidden="true">›</span>
@@ -372,7 +438,7 @@ function RestaurantListPage() {
                 {isLoading
                   ? "Finding restaurants…"
                   : activeHighlightLabel
-                    ? `${filteredRestaurants.length} ${activeHighlightLabel.toLowerCase()} places found`
+                    ? `${filteredRestaurants.length} ${activeHighlightLabel.toLowerCase()} found`
                     : `${filteredRestaurants.length} places found`}
               </p>
             </div>

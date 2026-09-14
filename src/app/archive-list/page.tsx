@@ -1,6 +1,7 @@
 "use client";
 
 import RestaurantManagerHeader from "@/components/RestaurantManagerHeader";
+import LoadingSpinner from "@/components/LoadingSpinner";
 import {
   useRestaurantOrders,
   useRestaurantOwnerProfile,
@@ -120,7 +121,7 @@ export default function ArchiveListPage() {
   }
 
   if (!authChecked || ownerQuery.isLoading) {
-    return <div className="min-h-screen grid place-items-center text-gray-600">Loading archive…</div>;
+    return <LoadingSpinner label="Loading archive…" fullScreen />;
   }
 
   return (
@@ -166,7 +167,7 @@ export default function ArchiveListPage() {
         </div>
 
         {error ? <div className="rounded-xl border border-red-200 bg-red-50 p-5 text-red-700">Unable to load archived orders. Please try again.</div> : null}
-        {isLoading ? <p className="py-12 text-center text-gray-500">Loading archived orders…</p> : null}
+        {isLoading ? <LoadingSpinner label="Loading archived orders…" className="py-12" /> : null}
         {!isLoading && !error && filteredOrders.length === 0 ? <div className="rounded-2xl border border-gray-200 px-6 py-12 text-center text-gray-500">No archived orders match these filters.</div> : null}
 
         {filteredOrders.length > 0 ? (

@@ -1,5 +1,6 @@
 "use client";
 import RestaurantManagerHeader from "@/components/RestaurantManagerHeader";
+import LoadingSpinner from "@/components/LoadingSpinner";
 import {
   useRestaurantOwnerProfile,
   useRestaurantSales,
@@ -58,11 +59,7 @@ export default function SalesPage() {
   );
 
   if (!authChecked || ownerQuery.isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-[#f7f3ed] text-stone-600">
-        Loading sales...
-      </div>
-    );
+    return <LoadingSpinner label="Loading sales…" fullScreen />;
   }
 
   const data = salesQuery.data;

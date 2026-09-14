@@ -1,12 +1,13 @@
 "use client";
 
 import { AuthField, AuthShell, FormMessage, PasswordField, PhoneField, preventImplicitFormSubmit, SubmitButton } from "@/components/auth/AuthUI";
-import { useRegisterRestaurant } from "@/lib/api";
+import { useAddressAutocomplete, useRegisterRestaurant } from "@/lib/api";
 import { extractAuthError } from "@/lib/api/error";
 import { isValidPhoneNumber } from "libphonenumber-js";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { Check, LoaderCircle, MapPin } from "lucide-react";
 
 const initialForm = {
   businessName: "",
@@ -15,6 +16,7 @@ const initialForm = {
   email: "",
   phone: "",
   address: "",
+  addressPlaceId: "",
   city: "",
   zipCode: "",
   password: "",
@@ -28,11 +30,18 @@ export default function BusinessSignUp() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [countryCode, setCountryCode] = useState("+41");
+  const [addressSuggestionsOpen, setAddressSuggestionsOpen] = useState(false);
   const router = useRouter();
   const registerMutation = useRegisterRestaurant();
+  const addressQuery = useAddressAutocomplete(formData.address);
 
   const update = (event: React.ChangeEvent<HTMLInputElement>) => {
-    setFormData((current) => ({ ...current, [event.target.name]: event.target.value }));
+    setFormData((current) => ({
+      ...current,
+      [event.target.name]: event.target.value,
+      ...(event.target.name === "address" ? { addressPlaceId: "" } : {}),
+    }));
+    if (event.target.name === "address") setAddressSuggestionsOpen(true);
   };
 
   return (
@@ -58,6 +67,11 @@ export default function BusinessSignUp() {
             setError("Postal code must contain numbers only.");
             return;
           }
+          if (!formData.addressPlaceId) {
+            setError("Select the restaurant address from the suggestions.");
+            setAddressSuggestionsOpen(true);
+            return;
+          }
           if (formData.password.length < 8) {
             setError("Use at least 8 characters for your password.");
             return;
@@ -78,6 +92,7 @@ export default function BusinessSignUp() {
               firstname: formData.ownerFirstName.trim(),
               lastname: formData.ownerLastName.trim(),
               address: formData.address.trim(),
+              address_place_id: formData.addressPlaceId,
               city: formData.city.trim(),
               postal_code: formData.zipCode.trim(),
               email: formData.email.trim(),
@@ -124,7 +139,53 @@ export default function BusinessSignUp() {
         <section className="border-t border-stone-100 pt-6 lg:col-span-2 lg:border-0 lg:pt-0">
           <h2 className="mb-4 text-sm font-bold uppercase tracking-[0.16em] text-stone-400 lg:sr-only">Business address</h2>
           <div className="grid gap-4 sm:grid-cols-2">
-            <AuthField label="Street address" id="address" name="address" autoComplete="street-address" value={formData.address} onChange={update} placeholder="Street and number" required className="sm:col-span-2" />
+            <div className="relative sm:col-span-2">
+              <label htmlFor="address" className="mb-2 block text-sm font-semibold text-stone-800">Street address</label>
+              <div className="flex h-12 items-center rounded-xl border border-stone-200 bg-white px-4 shadow-sm transition focus-within:border-[#c83b2b] focus-within:ring-4 focus-within:ring-[#c83b2b]/10">
+                <MapPin size={18} className="mr-2 shrink-0 text-[#c83b2b]" aria-hidden="true" />
+                <input
+                  id="address"
+                  name="address"
+                  value={formData.address}
+                  onChange={update}
+                  onFocus={() => setAddressSuggestionsOpen(true)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Escape") setAddressSuggestionsOpen(false);
+                  }}
+                  placeholder="Start typing the restaurant address"
+                  autoComplete="street-address"
+                  required
+                  className="min-w-0 flex-1 bg-transparent text-[15px] outline-none placeholder:text-stone-400"
+                />
+                {addressQuery.isFetching && <LoaderCircle size={17} className="animate-spin text-[#c83b2b]" aria-label="Loading address suggestions" />}
+              </div>
+              {addressSuggestionsOpen && formData.address.trim().length >= 3 && (
+                <div className="absolute inset-x-0 top-[calc(100%+8px)] z-30 max-h-64 overflow-y-auto rounded-2xl border border-stone-200 bg-white p-2 shadow-2xl">
+                  {(addressQuery.data ?? []).length > 0 ? (addressQuery.data ?? []).map((suggestion) => (
+                    <button
+                      key={suggestion.place_id}
+                      type="button"
+                      onClick={() => {
+                        setFormData((current) => ({
+                          ...current,
+                          address: suggestion.description,
+                          addressPlaceId: suggestion.place_id,
+                        }));
+                        setAddressSuggestionsOpen(false);
+                        setError(null);
+                      }}
+                      className="flex w-full items-start gap-3 rounded-xl px-3 py-3 text-left text-sm transition hover:bg-[#fff1ed]"
+                    >
+                      <MapPin size={17} className="mt-0.5 shrink-0 text-[#c83b2b]" aria-hidden="true" />
+                      <span className="flex-1 leading-5">{suggestion.description}</span>
+                      {formData.addressPlaceId === suggestion.place_id && <Check size={16} className="mt-0.5 text-emerald-600" aria-hidden="true" />}
+                    </button>
+                  )) : !addressQuery.isFetching ? (
+                    <p className="px-3 py-4 text-sm text-stone-500">No matching addresses found.</p>
+                  ) : null}
+                </div>
+              )}
+            </div>
             <AuthField label="Postal code" id="zipCode" name="zipCode" autoComplete="postal-code" inputMode="numeric" value={formData.zipCode} onChange={update} placeholder="1201" required />
             <AuthField label="City" id="city" name="city" autoComplete="address-level2" value={formData.city} onChange={update} placeholder="Geneva" required />
           </div>

@@ -8,6 +8,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { useLanguage } from "@/components/LanguageProvider";
 import LanguageSwitch from "@/components/LanguageSwitch";
+import { getBrowserLocation } from "@/lib/browser-location";
 
 const heroImages = [
   "/images/Dashboard-1.png",
@@ -100,22 +101,13 @@ export default function Home() {
     router.push(`/partners?${params.toString()}`);
   };
 
-  const useCurrentLocation = () => {
+  const useCurrentLocation = async () => {
     setLocationError("");
     setAddressError("");
 
-    if (!("geolocation" in navigator)) {
-      setLocationError(fr ? "La géolocalisation n’est pas prise en charge par ce navigateur." : "Geolocation is not supported in this browser.");
-      return;
-    }
-
     setLocationLoading(true);
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        const coords = {
-          lat: position.coords.latitude,
-          lng: position.coords.longitude,
-        };
+    try {
+        const coords = await getBrowserLocation();
         const label = fr ? "Ma position actuelle" : "My current location";
 
         setSelectedCoords(coords);
@@ -125,14 +117,11 @@ export default function Home() {
         sessionStorage.setItem("deliveryLocationLat", String(coords.lat));
         sessionStorage.setItem("deliveryLocationLng", String(coords.lng));
         setSuggestionsOpen(false);
-        setLocationLoading(false);
-      },
-      () => {
-        setLocationLoading(false);
-        setLocationError(fr ? "Nous n’avons pas pu accéder à votre position. Vérifiez l’autorisation du navigateur." : "We couldn’t access your location. Please check the browser permission.");
-      },
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 5 * 60 * 1000 },
-    );
+    } catch (error) {
+      setLocationError(error instanceof Error ? error.message : "We couldn’t access your location. Please try again.");
+    } finally {
+      setLocationLoading(false);
+    }
   };
 
   return (

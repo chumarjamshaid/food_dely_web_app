@@ -1,5 +1,6 @@
 "use client";
 import RestaurantManagerHeader from "@/components/RestaurantManagerHeader";
+import LoadingSpinner from "@/components/LoadingSpinner";
 import {
   ORDER_STATUS_VALUES,
   useCancelRestaurantOrder,
@@ -80,7 +81,48 @@ function itemName(item: NonNullable<RestaurantOrderListItem["items"]>[number]) {
 }
 
 function itemOptions(item: NonNullable<RestaurantOrderListItem["items"]>[number]) {
-  return item.options ?? item.selected_options ?? [];
+  const record = item as Record<string, unknown>;
+  const sources = [
+    record.selected_options,
+    record.options,
+    record.menu_item_options,
+    record.order_item_options,
+    record.option_items,
+    record.choices,
+  ];
+  const selections = sources.flatMap((value) => Array.isArray(value) ? value : value ? [value] : []);
+
+  const text = (value: unknown): string[] => {
+    if (Array.isArray(value)) return value.flatMap(text);
+    if (typeof value === "string" && value.trim() && !/^\d+$/.test(value.trim())) return [value.trim()];
+    if (!value || typeof value !== "object") return [];
+    const nested = value as Record<string, unknown>;
+    return text(nested.item_name ?? nested.name ?? nested.label ?? nested.title ?? nested.value);
+  };
+
+  return selections.flatMap((selection, index) => {
+    if (typeof selection === "string") return [{ key: `${index}-${selection}`, label: selection }];
+    if (!selection || typeof selection !== "object") return [];
+    const option = selection as Record<string, unknown>;
+    const groupNames = text(option.option_name ?? option.group_name ?? option.option ?? option.menu_item_option);
+    const itemNames = text(
+      option.item_name ??
+      option.selected_item ??
+      option.selected_items ??
+      option.menu_item_option_item ??
+      option.menu_item_option_items ??
+      option.item ??
+      option.items ??
+      option.choice ??
+      option.choices ??
+      option.value ??
+      option.name,
+    );
+    const names = [...new Set(itemNames)];
+    if (names.length === 0) return [];
+    const prefix = groupNames[0] ? `${groupNames[0]}: ` : "";
+    return [{ key: String(option.id ?? `${index}-${names.join("-")}`), label: `${prefix}${names.join(", ")}` }];
+  });
 }
 
 export default function OrderListPage() {
@@ -135,11 +177,7 @@ export default function OrderListPage() {
   }, [displayAll, ordersQuery.data]);
 
   if (!authChecked || ownerQuery.isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-[#f7f3ed] text-stone-600">
-        Loading orders...
-      </div>
-    );
+    return <LoadingSpinner label="Loading orders…" fullScreen />;
   }
 
   const submitCancel = () => {
@@ -213,7 +251,11 @@ export default function OrderListPage() {
                     </label>
                     <select
                       value={status}
-                      onChange={(e) => setStatus(e.target.value as typeof status)}
+                      onChange={(e) => {
+                        const nextStatus = e.target.value as typeof status;
+                        setStatus(nextStatus);
+                        if (nextStatus === "completed") setDisplayAll(true);
+                      }}
                       className="h-12 w-full rounded-lg border border-gray-300 bg-white px-3 text-sm font-medium text-gray-700"
                     >
                       <option value="all">All active statuses</option>
@@ -228,10 +270,17 @@ export default function OrderListPage() {
                     <input
                       type="checkbox"
                       checked={displayAll}
-                      onChange={(e) => setDisplayAll(e.target.checked)}
+                      onChange={(e) => {
+                        const checked = e.target.checked;
+                        setDisplayAll(checked);
+                        if (!checked && status === "completed") setStatus("all");
+                      }}
                       className="h-4 w-4 accent-[#c83b2b]"
                     />
-                    Display all, including completed orders
+                    <span>
+                      <span className="block font-semibold text-stone-900">Display all</span>
+                      <span className="block text-xs text-stone-500">Include completed orders</span>
+                    </span>
                   </label>
                   <Popover.Arrow className="fill-white" />
                 </Popover.Content>
@@ -263,7 +312,7 @@ export default function OrderListPage() {
               {ordersQuery.isLoading && (
                 <tr>
                   <td colSpan={6} className="px-6 py-8 text-center text-gray-500">
-                    Loading orders...
+                    <LoadingSpinner label="Loading orders…" />
                   </td>
                 </tr>
               )}
@@ -354,10 +403,8 @@ export default function OrderListPage() {
                                           <p className="font-semibold text-stone-900">{item.quantity ?? 1}x {itemName(item)}</p>
                                           {options.length > 0 && (
                                             <ul className="mt-1 space-y-1 text-xs text-stone-500">
-                                              {options.map((option, optionIdx) => (
-                                                <li key={option.id ?? optionIdx}>
-                                                  {option.option_name ? `${option.option_name}: ` : ""}{option.item_name ?? option.name ?? "Selected option"}
-                                                </li>
+                                              {options.map((option) => (
+                                                <li key={option.key}>{option.label}</li>
                                               ))}
                                             </ul>
                                           )}

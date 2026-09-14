@@ -7,6 +7,7 @@ import {
   useConfirmPayment,
   useCreateAddress,
   useCreatePaymentIntent,
+  type PaymentIntentRequest,
   useRestaurantDetail,
   useValidateCart,
 } from "@/lib/api";
@@ -25,6 +26,7 @@ import {
   CreditCard,
   LockKeyhole,
   MapPin,
+  PackageCheck,
   ShoppingBag,
   Truck,
 } from "lucide-react";
@@ -225,9 +227,22 @@ function PaymentPageContent() {
     }
   }, [apiCart, isCartLoading]);
 
-  // Pickup availability is no longer part of the restaurant API. Checkout is
-  // delivery-only and is controlled solely by `delivery_available`.
-  const deliveryType = "delivery" as const;
+  // Pickup is always available. Delivery is offered only when the restaurant
+  // detail endpoint explicitly returns `delivery_available: true`.
+  const deliveryAvailable = cartRestaurant?.delivery_available === true;
+  const [requestedDeliveryType, setRequestedDeliveryType] = useState<"delivery" | "pickup">("delivery");
+  const deliveryType = requestedDeliveryType === "delivery" && deliveryAvailable
+    ? "delivery"
+    : "pickup";
+
+  const selectDeliveryType = (type: "delivery" | "pickup") => {
+    if (type === "delivery" && !deliveryAvailable) return;
+    setRequestedDeliveryType(type);
+    sessionStorage.setItem("checkout_delivery_type", type);
+    sessionStorage.removeItem("checkout_client_secret");
+    setClientSecret(null);
+    setPaymentError(null);
+  };
 
   const [guestInfo, setGuestInfo] = useState<GuestInfo>({
     firstName: "",
@@ -289,8 +304,8 @@ function PaymentPageContent() {
           }
         }
 
-        if (savedDeliveryType !== "delivery") {
-          sessionStorage.setItem("checkout_delivery_type", "delivery");
+        if (savedDeliveryType === "delivery" || savedDeliveryType === "pickup") {
+          setRequestedDeliveryType(savedDeliveryType);
         }
       }
     }
@@ -408,7 +423,7 @@ function PaymentPageContent() {
   };
 
   // Get delivery information
-  const getDeliveryInfo = () => {
+  const getDeliveryInfo = (): PaymentIntentRequest | null => {
     if (!guestInfo.firstName || !guestInfo.lastName || !guestInfo.email || !guestInfo.phone) {
       return null;
     }
@@ -421,11 +436,12 @@ function PaymentPageContent() {
     }
 
     return {
+      fulfilment_type: deliveryType,
       delivery_firstname: guestInfo.firstName,
       delivery_lastname: guestInfo.lastName,
-      delivery_address: guestInfo.address || "",
-      delivery_postal_code: guestInfo.postalCode || "",
-      delivery_city: guestInfo.city || "",
+      delivery_address: deliveryType === "delivery" ? guestInfo.address : "",
+      delivery_postal_code: deliveryType === "delivery" ? guestInfo.postalCode : "",
+      delivery_city: deliveryType === "delivery" ? guestInfo.city : "",
       delivery_phone: guestInfo.phone,
       delivery_email: guestInfo.email,
       tip_amount: guestInfo.tipAmount ? Number(guestInfo.tipAmount) : undefined,
@@ -524,75 +540,7 @@ function PaymentPageContent() {
         setPaymentError(null);
       },
       onError: (err: unknown) => {
-        const error = err as {
-          response?: {
-            data?: {
-              message?: string;
-              error?: string;
-              detail?: string;
-              [key: string]: unknown;
-            };
-            status?: number;
-          };
-        };
-
-        // Extract error message from various possible locations
-        const errorData = error?.response?.data;
-        let errorMessage = "Failed to create payment intent. Please try again.";
-
-        if (errorData) {
-          // Try different possible error message fields
-          errorMessage =
-            (typeof errorData.error === "string" ? errorData.error : null) ||
-            (typeof errorData.message === "string" ? errorData.message : null) ||
-            (typeof errorData.detail === "string" ? errorData.detail : null) ||
-            (typeof errorData === "string" ? errorData : null) ||
-            errorMessage;
-        }
-
-        setPaymentError(errorMessage);
-        const normalizedError = errorMessage.toLowerCase();
-
-        // Handle specific error cases based on API documentation error codes
-        if (
-          normalizedError.includes("outside") ||
-          normalizedError.includes("out of range") ||
-          normalizedError.includes("delivery range") ||
-          normalizedError.includes("delivery radius") ||
-          normalizedError.includes("delivery area") ||
-          normalizedError.includes("delivery zone") ||
-          normalizedError.includes("too_far") ||
-          normalizedError.includes("too far") ||
-          normalizedError.includes("not deliver") ||
-          normalizedError.includes("hors zone") ||
-          normalizedError.includes("rayon de livraison")
-        ) {
-          setPaymentError(`Sorry, this address is outside ${restaurantName}'s delivery range. Choose another saved address or enter a different delivery address.`);
-        } else if (errorMessage.includes("api.cart_not_found") || errorMessage.includes("cart_not_found")) {
-          setPaymentError("Your cart was not found (404). Please add items to your cart and try again.");
-        } else if (errorMessage.includes("api.cart_empty") || errorMessage.includes("cart_empty")) {
-          setPaymentError("Your cart is empty (404). Please add items to your cart first.");
-        } else if (errorMessage.includes("api.cart_delivery_not_defined") || errorMessage.includes("cart_delivery_not_defined")) {
-          setPaymentError("Delivery information is not defined (404). Please fill in all delivery details.");
-        } else if (errorMessage.includes("api.payment_intent_invalid") || errorMessage.includes("payment_intent_invalid")) {
-          // According to API docs, this is a 400 error - backend validation failed
-          setPaymentError(
-            "Payment validation failed. Please check the following:\n" +
-            "• Your cart contains valid items with correct quantities\n" +
-            "• All items are available and in stock\n\n" +
-            "Technical Details: Server-side cart validation failed. " +
-            "This could be due to invalid items, incorrect quantities, or pricing issues. " +
-            "Please refresh the page and try again. If the problem persists, contact support."
-          );
-        } else if (errorMessage.includes("cart_invalid") || errorMessage.includes("CART_INVALID") || errorMessage.includes("api.cart_invalid")) {
-          // Cart is corrupted - user needs to clear it and start over
-          // Set a special error flag to show the clear cart button
-          setPaymentError("CART_INVALID");
-        } else if (errorMessage.includes("delivery") || errorMessage.includes("address")) {
-          setPaymentError("Please provide complete delivery information (address, city, and postal code).");
-        } else if (errorMessage.includes("cart")) {
-          setPaymentError("There's an issue with your cart. Please refresh the page and try again.");
-        }
+        setPaymentError(extractApiError(err, "Failed to create payment intent. Please try again."));
       },
     });
   };
@@ -654,7 +602,7 @@ function PaymentPageContent() {
             Complete your order
           </h1>
           <p className="mt-2 text-sm leading-6 text-[#7d716a]">
-            Confirm your delivery details and pay securely.
+            Confirm your fulfilment details and pay securely.
           </p>
           {hasCartItems && (
             <p className="mt-3 text-sm font-black text-[#b63825]">
@@ -679,27 +627,43 @@ function PaymentPageContent() {
             <div className="rounded-[26px] border border-[#e9dfda] bg-white p-5 shadow-[0_16px_45px_rgba(55,35,27,0.06)] sm:p-7 lg:p-8">
               <div className="mb-5 flex items-center gap-3">
                 <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#fff0eb] text-[#b63825]">
-                  <Truck size={21} />
+                  {deliveryType === "delivery" ? <Truck size={21} /> : <PackageCheck size={21} />}
                 </div>
                 <div>
                   <p className="text-xs font-bold uppercase tracking-[0.14em] text-[#b63825]">Fulfilment</p>
                   <div className="text-xl font-black text-[#222]">
-                    Delivery details
+                    {deliveryType === "delivery" ? "Delivery details" : "Pickup details"}
                   </div>
                 </div>
               </div>
-              <div className="mb-8 rounded-2xl bg-[#f8f3f0] p-1.5">
-                <div className="flex min-h-12 items-center justify-center gap-2 rounded-xl bg-white px-4 font-bold text-[#b63825] shadow-sm">
-                  <Truck size={18} />
-                  Delivery
-                </div>
+              <div className={`mb-8 grid gap-2 rounded-2xl bg-[#f8f3f0] p-1.5 ${deliveryAvailable ? "grid-cols-2" : "grid-cols-1"}`}>
+                {deliveryAvailable && (
+                  <button
+                    type="button"
+                    onClick={() => selectDeliveryType("delivery")}
+                    className={`flex min-h-12 items-center justify-center gap-2 rounded-xl px-4 font-bold transition ${deliveryType === "delivery" ? "bg-white text-[#b63825] shadow-sm" : "text-[#766a64] hover:text-[#b63825]"}`}
+                  >
+                    <Truck size={18} />
+                    Delivery
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => selectDeliveryType("pickup")}
+                  className={`flex min-h-12 items-center justify-center gap-2 rounded-xl px-4 font-bold transition ${deliveryType === "pickup" ? "bg-white text-[#b63825] shadow-sm" : "text-[#766a64] hover:text-[#b63825]"}`}
+                >
+                  <PackageCheck size={18} />
+                  Pickup
+                </button>
               </div>
 
               {/* Guest Checkout Section */}
               <div className="mb-6">
                 <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
                   <h3 className="text-lg font-black text-[#222]">
-                    {isAuthenticated ? "Delivery Information" : "Guest Checkout"}
+                    {isAuthenticated
+                      ? deliveryType === "delivery" ? "Delivery Information" : "Pickup Information"
+                      : "Guest Checkout"}
                   </h3>
                   {isAuthenticated && (
                     <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700">

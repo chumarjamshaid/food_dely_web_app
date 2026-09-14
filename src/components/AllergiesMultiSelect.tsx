@@ -1,5 +1,6 @@
 "use client";
 import { useAllergies } from "@/lib/api";
+import LoadingSpinner from "@/components/LoadingSpinner";
 
 interface Props {
   selectedIds: number[];
@@ -33,7 +34,7 @@ export default function AllergiesMultiSelect({
         {label}
       </span>
       {isLoading ? (
-        <p className="text-xs text-gray-500">Loading allergies…</p>
+        <LoadingSpinner label="Loading allergies…" className="justify-start text-xs" />
       ) : list.length === 0 ? (
         <p className="text-xs text-gray-500">No allergies available.</p>
       ) : (

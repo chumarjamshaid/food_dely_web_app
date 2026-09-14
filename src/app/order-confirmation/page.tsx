@@ -241,7 +241,7 @@ function OrderConfirmationContent() {
                                         </div>
                                         <div className="text-right">
                                             <p className="font-semibold text-black">
-                                                {(item.price * item.quantity).toFixed(2)} CHF
+                                                {(Number(item.price ?? item.menu_item?.price ?? item.nowaste_item?.price ?? 0) * item.quantity).toFixed(2)} CHF
                                             </p>
                                         </div>
                                     </div>

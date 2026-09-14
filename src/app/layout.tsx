@@ -3,6 +3,7 @@ import { LanguageProvider } from '@/components/LanguageProvider'
 import GlobalLanguageSwitch from '@/components/GlobalLanguageSwitch'
 import AppTranslator from '@/components/AppTranslator'
 import CookieConsent from '@/components/CookieConsent'
+import HomeNavigationGuard from '@/components/HomeNavigationGuard'
 import { type Metadata } from 'next'
 // import { Geist, Geist_Mono } from 'next/font/google'
 import './globals.css'
@@ -38,6 +39,7 @@ export default function RootLayout({
         <QueryProvider>
           <LanguageProvider>
             <AppTranslator />
+            <HomeNavigationGuard />
             <GlobalLanguageSwitch />
             {children}
             <CookieConsent />

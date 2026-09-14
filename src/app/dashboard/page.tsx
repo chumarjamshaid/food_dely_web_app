@@ -1,5 +1,6 @@
 "use client";
 import RestaurantManagerHeader from "@/components/RestaurantManagerHeader";
+import LoadingSpinner from "@/components/LoadingSpinner";
 import {
   useRestaurantOrders,
   useRestaurantOwnerProfile,
@@ -53,11 +54,7 @@ export default function DashboardPage() {
   const restaurant = ownerQuery.data;
 
   if (!authChecked || ownerQuery.isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-[#f7f3ed] text-stone-600">
-        Loading dashboard...
-      </div>
-    );
+    return <LoadingSpinner label="Loading dashboard…" fullScreen />;
   }
 
 

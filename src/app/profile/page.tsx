@@ -5,6 +5,7 @@ import "@fontsource/abril-fatface";
 import Link from "next/link";
 import { getOrderRestaurantName, getOrderRestaurantNameFromCatalog } from "@/lib/order-restaurant";
 import { ArrowLeft } from "lucide-react";
+import LoadingSpinner from "@/components/LoadingSpinner";
 
 export default function ProfilePage() {
   // const router = useRouter();
@@ -14,11 +15,7 @@ export default function ProfilePage() {
   const { data: restaurantCatalog } = useRestaurantCatalog();
 
   if (isLoadingProfile) {
-    return (
-      <div className="min-h-screen bg-black flex items-center justify-center">
-        <div className="text-white text-xl">Loading profile...</div>
-      </div>
-    );
+    return <LoadingSpinner label="Loading profile…" fullScreen />;
   }
 
   if (profileError || !profile) {
@@ -113,7 +110,7 @@ export default function ProfilePage() {
             </Link>
           </div>
           {isLoadingAddresses ? (
-            <div className="text-gray-400">Loading addresses...</div>
+            <LoadingSpinner label="Loading addresses…" className="justify-start text-gray-400" />
           ) : addresses && addresses.length > 0 ? (
             <div className="space-y-3">
               {addresses.map((address) => (
@@ -154,7 +151,7 @@ export default function ProfilePage() {
             </Link>
           </div>
           {isLoadingOrders ? (
-            <div className="text-gray-400">Loading orders...</div>
+            <LoadingSpinner label="Loading orders…" className="justify-start text-gray-400" />
           ) : orders && orders.length > 0 ? (
             <div className="space-y-3">
               {orders.slice(0, 3).map((order) => (

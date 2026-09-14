@@ -1,5 +1,6 @@
 "use client";
 import RestaurantManagerHeader from "@/components/RestaurantManagerHeader";
+import LoadingSpinner from "@/components/LoadingSpinner";
 import {
   useRestaurantOwnerProfile,
   useRestaurantReviews,
@@ -36,11 +37,7 @@ export default function CustomerReviewsPage() {
   const reviewsQuery = useRestaurantReviews(limit, !!ownerQuery.data);
 
   if (!authChecked || ownerQuery.isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-[#f7f3ed] text-stone-600">
-        Loading reviews...
-      </div>
-    );
+    return <LoadingSpinner label="Loading reviews…" fullScreen />;
   }
 
   const reviews = reviewsQuery.data ?? [];
@@ -64,7 +61,7 @@ export default function CustomerReviewsPage() {
         </div>
 
         {reviewsQuery.isLoading && reviews.length === 0 && (
-          <p className="py-12 text-center text-gray-500">Loading reviews…</p>
+          <LoadingSpinner label="Loading reviews…" className="py-12" />
         )}
 
         {!reviewsQuery.isLoading && reviews.length === 0 && (

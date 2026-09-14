@@ -19,6 +19,7 @@ export function extractApiError(
   if (data && typeof data === "object") {
     const obj = data as Record<string, unknown>;
     if (typeof obj.code === "string" && obj.code.trim()) return obj.code.trim();
+    if (typeof obj.error === "string" && obj.error.trim()) return obj.error.trim();
     if (typeof obj.detail === "string" && obj.detail.trim())
       return obj.detail.trim();
     if (typeof obj.message === "string" && obj.message.trim())

@@ -1,5 +1,6 @@
 "use client";
 import RestaurantManagerHeader from "@/components/RestaurantManagerHeader";
+import LoadingSpinner from "@/components/LoadingSpinner";
 import {
   useCreateRestaurantClosing,
   useAddressAutocomplete,
@@ -46,11 +47,7 @@ function addSeconds(t: string) {
 export default function RestaurantSettingsPage() {
   return (
     <Suspense
-      fallback={
-        <div className="min-h-screen flex items-center justify-center bg-white text-gray-600">
-          Loading settings...
-        </div>
-      }
+      fallback={<LoadingSpinner label="Loading settings…" fullScreen />}
     >
       <RestaurantSettingsContent />
     </Suspense>
@@ -105,11 +102,7 @@ function RestaurantSettingsContent() {
   }, [tabParam]);
 
   if (!authChecked || ownerQuery.isLoading || !restaurant) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-[#f7f3ed] text-stone-600">
-        Loading restaurant settings...
-      </div>
-    );
+    return <LoadingSpinner label="Loading restaurant settings…" fullScreen />;
   }
 
   return (
@@ -413,18 +406,21 @@ function DeliveryTab({ restaurant }: { restaurant: RestaurantOwnerProfile }) {
         <NumberField
           label="Minimum order amount (CHF)"
           step="0.5"
+          placeholder="25.00"
           value={form.min_amount}
           onChange={(v) => setForm((p) => ({ ...p, min_amount: v }))}
         />
         <NumberField
           label="Delivery radius (km)"
           step="1"
+          placeholder="5"
           value={form.delivery_radius}
           onChange={(v) => setForm((p) => ({ ...p, delivery_radius: v }))}
         />
         <NumberField
           label="Delivery fee (CHF)"
           step="0.5"
+          placeholder="4.50"
           value={form.delivery_fee}
           onChange={(v) => setForm((p) => ({ ...p, delivery_fee: v }))}
         />
@@ -759,11 +755,13 @@ function NumberField({
   value,
   onChange,
   step,
+  placeholder,
 }: {
   label: string;
   value: number;
   onChange: (v: number) => void;
   step?: string;
+  placeholder?: string;
 }) {
   return (
     <div>
@@ -775,6 +773,7 @@ function NumberField({
         step={step}
         min={0}
         value={Number.isFinite(value) ? value : 0}
+        placeholder={placeholder}
         onChange={(e) => onChange(parseFloat(e.target.value) || 0)}
         className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#CD3625]"
       />

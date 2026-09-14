@@ -1,5 +1,6 @@
 "use client";
 import RestaurantManagerHeader from "@/components/RestaurantManagerHeader";
+import LoadingSpinner from "@/components/LoadingSpinner";
 import {
   useCreateDiscount,
   useDeleteDiscount,
@@ -52,11 +53,7 @@ export default function DiscountsPage() {
   const [actionError, setActionError] = useState("");
 
   if (!authChecked || ownerQuery.isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-[#f7f3ed] text-stone-600">
-        Loading discounts...
-      </div>
-    );
+    return <LoadingSpinner label="Loading discounts…" fullScreen />;
   }
 
   const discounts = discountsQuery.data ?? [];
@@ -113,7 +110,7 @@ export default function DiscountsPage() {
         </div>
 
         {discountsQuery.isLoading && (
-          <p className="py-12 text-center text-gray-500">Loading discounts…</p>
+          <LoadingSpinner label="Loading discounts…" className="py-12" />
         )}
 
         {actionError && <div className="mb-5 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{actionError}</div>}

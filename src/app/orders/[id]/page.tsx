@@ -1,6 +1,5 @@
 "use client";
 import {
-  useAddToCart,
   useCancelOrder,
   useCart,
   useOrderDetail,
@@ -46,6 +45,21 @@ const statusExperience = {
   can_rest: { icon: XCircle, eyebrow: "Order cancelled", title: "Cancelled by restaurant", copy: "The restaurant could not complete this order.", gradient: "from-rose-600 to-red-800", glow: "bg-rose-300" },
 } satisfies Record<OrderStatus, { icon: typeof Clock3; eyebrow: string; title: string; copy: string; gradient: string; glow: string }>;
 
+function numericPrice(value: unknown): number | null {
+  if (typeof value === "number") return Number.isFinite(value) ? value : null;
+  if (typeof value !== "string") return null;
+  const parsed = Number(value.trim().replace(",", "."));
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function orderItemPrice(item: NonNullable<ReturnType<typeof useOrderDetail>["data"]>["items"][number]) {
+  const lineTotal = numericPrice(item.line_total ?? item.total_price ?? item.price);
+  if (lineTotal !== null) return lineTotal;
+
+  const unitPrice = numericPrice(item.unit_price ?? item.menu_item?.price ?? item.nowaste_item?.price);
+  return unitPrice === null ? null : unitPrice * item.quantity;
+}
+
 export default function OrderDetailPage() {
   const params = useParams();
   const router = useRouter();
@@ -59,7 +73,6 @@ export default function OrderDetailPage() {
     10_000,
   );
   const cancelOrder = useCancelOrder();
-  const addToCart = useAddToCart();
 
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
@@ -80,29 +93,6 @@ export default function OrderDetailPage() {
     firstname: order.delivery_firstname, lastname: order.delivery_lastname ?? "", address: order.delivery_address ?? "",
     postal_code: order.delivery_postal_code ?? "", city: order.delivery_city ?? "", phone: order.delivery_phone, email: order.delivery_email,
   } : undefined);
-
-  const handleReorder = async () => {
-    if (!order) return;
-
-    for (const item of order.items) {
-      if (item.menu_item?.id) {
-        await addToCart.mutateAsync({
-          menu_item: item.menu_item.id,
-          quantity: item.quantity,
-          options: item.options?.map(opt => ({
-            option: opt.option,
-            item: opt.item || (Array.isArray(opt.menu_item_option_item) ? opt.menu_item_option_item[0] : opt.menu_item_option_item),
-          })),
-        });
-      } else if (item.nowaste_item?.id) {
-        await addToCart.mutateAsync({
-          nowaste_item: item.nowaste_item.id,
-          quantity: item.quantity,
-        });
-      }
-    }
-    router.push("/cart");
-  };
 
   const handleCancel = () => {
     if (!cancelReason.trim() || !order) return;
@@ -267,8 +257,9 @@ export default function OrderDetailPage() {
                 <div className="rounded-[24px] border border-[#e9dfda] bg-white p-6 shadow-[0_14px_38px_rgba(55,35,27,0.06)]">
                   <h2 className="text-lg font-semibold text-[#222] mb-4">Order Items</h2>
                   <div className="space-y-4">
-                    {order.items.map((item) => (
-                      <div key={item.id} className="flex items-center gap-4 p-4 bg-gray-50 rounded-xl">
+                    {order.items.map((item) => {
+                      const itemPrice = orderItemPrice(item);
+                      return <div key={item.id} className="flex items-center gap-4 p-4 bg-gray-50 rounded-xl">
                         <div className="w-20 h-20 rounded-xl overflow-hidden relative flex-shrink-0 bg-gray-200">
                           <SafeImage
                             src={item.menu_item?.image || item.nowaste_item?.image}
@@ -295,10 +286,10 @@ export default function OrderDetailPage() {
                           <p className="text-gray-600 text-sm mt-1">Qty: {item.quantity}</p>
                         </div>
                         <div className="text-right">
-                          <p className="font-semibold text-[#222]">{Number(item.price).toFixed(2)} CHF</p>
+                          <p className="font-semibold text-[#222]">{itemPrice === null ? "—" : itemPrice.toFixed(2)} CHF</p>
                         </div>
-                      </div>
-                    ))}
+                      </div>;
+                    })}
                   </div>
                 </div>
               </div>
@@ -357,27 +348,18 @@ export default function OrderDetailPage() {
                 )}
 
                 {/* Actions */}
-                <div className="rounded-[22px] border border-[#e9dfda] bg-white p-6">
+                {canCancel && <div className="rounded-[22px] border border-[#e9dfda] bg-white p-6">
                   <h2 className="mb-4 flex items-center gap-2 text-lg font-black"><PackageCheck size={18} className="text-[#b63825]" /> Order actions</h2>
                   <div className="space-y-3">
                     <button
-                      onClick={handleReorder}
-                      disabled={addToCart.isPending}
-                      className="w-full px-6 py-3 bg-[#CD3625] text-white rounded-full font-medium hover:bg-red-600 transition disabled:opacity-50"
+                      onClick={() => setShowCancelModal(true)}
+                      disabled={cancelOrder.isPending}
+                      className="w-full px-6 py-3 border border-gray-300 text-gray-700 rounded-full font-medium hover:bg-gray-50 transition disabled:opacity-50"
                     >
-                      {addToCart.isPending ? "Adding to cart..." : "Reorder"}
+                      {cancelOrder.isPending ? "Cancelling..." : "Cancel Order"}
                     </button>
-                    {canCancel && (
-                      <button
-                        onClick={() => setShowCancelModal(true)}
-                        disabled={cancelOrder.isPending}
-                        className="w-full px-6 py-3 border border-gray-300 text-gray-700 rounded-full font-medium hover:bg-gray-50 transition disabled:opacity-50"
-                      >
-                        {cancelOrder.isPending ? "Cancelling..." : "Cancel Order"}
-                      </button>
-                    )}
                   </div>
-                </div>
+                </div>}
               </div>
             </div>
           )}

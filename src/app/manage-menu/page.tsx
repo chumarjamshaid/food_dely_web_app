@@ -2,6 +2,7 @@
 import MenuItemEditModal from "@/components/MenuItemEditModal";
 import NowasteItemEditModal from "@/components/NowasteItemEditModal";
 import RestaurantManagerHeader from "@/components/RestaurantManagerHeader";
+import LoadingSpinner from "@/components/LoadingSpinner";
 import {
   useDeleteFood,
   useFoods,
@@ -49,6 +50,16 @@ export default function ManageMenu() {
   const [editingNowaste, setEditingNowaste] = useState<NowasteItem | null>(null);
   const [nowasteModalOpen, setNowasteModalOpen] = useState(false);
   const [categoryError, setCategoryError] = useState("");
+  const [categoryToDelete, setCategoryToDelete] = useState<{ id: number; name: string } | null>(null);
+
+  useEffect(() => {
+    if (!categoryToDelete) return;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !deleteFood.isPending) setCategoryToDelete(null);
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [categoryToDelete, deleteFood.isPending]);
 
   const foods = foodsQuery.data ?? [];
   const itemsData = menuItemsQuery.data;
@@ -82,23 +93,24 @@ export default function ManageMenu() {
     setNowasteModalOpen(true);
   }
 
-  async function removeFoodCategory(id: number, name: string) {
-    if (!confirm(`Delete menu category "${name}"? Menu items in this category may need reassignment.`)) return;
+  function requestFoodCategoryRemoval(id: number, name: string) {
     setCategoryError("");
+    setCategoryToDelete({ id, name });
+  }
+
+  async function confirmFoodCategoryRemoval() {
+    if (!categoryToDelete) return;
     try {
-      await deleteFood.mutateAsync(id);
-      if (selected === id) setSelected("all");
+      await deleteFood.mutateAsync(categoryToDelete.id);
+      if (selected === categoryToDelete.id) setSelected("all");
+      setCategoryToDelete(null);
     } catch (requestError) {
       setCategoryError(extractApiError(requestError, "Food category could not be removed."));
     }
   }
 
   if (!authChecked || ownerQuery.isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-[#f7f3ed] text-stone-600">
-        Loading menu...
-      </div>
-    );
+    return <LoadingSpinner label="Loading menu…" fullScreen />;
   }
 
   return (
@@ -159,7 +171,7 @@ export default function ManageMenu() {
               </button>
               <button
                 type="button"
-                onClick={() => removeFoodCategory(f.id, f.name)}
+                onClick={() => requestFoodCategoryRemoval(f.id, f.name)}
                 disabled={deleteFood.isPending}
                 aria-label={`Delete ${f.name}`}
                 className={`mr-2 grid size-6 place-items-center rounded-full text-xs font-bold disabled:opacity-50 ${selected === f.id ? "hover:bg-white/15" : "text-red-600 hover:bg-red-50"}`}
@@ -184,9 +196,7 @@ export default function ManageMenu() {
         {selected !== "nowaste" && (
           <>
             {menuItemsQuery.isLoading && (
-              <p className="py-12 text-center text-gray-500">
-                Loading menu items…
-              </p>
+              <LoadingSpinner label="Loading menu items…" className="py-12" />
             )}
             {!menuItemsQuery.isLoading && filtered.length === 0 && (
               <div className="rounded-3xl border border-dashed border-stone-300 bg-white px-6 py-16 text-center text-stone-500">
@@ -207,6 +217,52 @@ export default function ManageMenu() {
           </>
         )}
       </main>
+
+      {categoryToDelete && (
+        <div
+          className="fixed inset-0 z-[100] grid place-items-center bg-stone-950/55 p-4 backdrop-blur-sm"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget && !deleteFood.isPending) setCategoryToDelete(null);
+          }}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="delete-category-title"
+            aria-describedby="delete-category-description"
+            className="w-full max-w-md rounded-3xl border border-stone-200 bg-white p-6 shadow-2xl sm:p-7"
+          >
+            <div className="grid size-12 place-items-center rounded-2xl bg-red-50 text-2xl font-bold text-red-600" aria-hidden="true">×</div>
+            <h2 id="delete-category-title" className="mt-5 text-2xl font-semibold tracking-tight text-stone-950">Delete menu category?</h2>
+            <p id="delete-category-description" className="mt-3 text-sm leading-6 text-stone-600">
+              You are about to delete <strong className="text-stone-900">{categoryToDelete.name}</strong>. Menu items in this category may need reassignment.
+            </p>
+            {categoryError && <p role="alert" className="mt-4 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{categoryError}</p>}
+            <div className="mt-7 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                onClick={() => {
+                  setCategoryToDelete(null);
+                  setCategoryError("");
+                }}
+                disabled={deleteFood.isPending}
+                autoFocus
+                className="rounded-xl border border-stone-300 px-5 py-3 text-sm font-semibold text-stone-700 transition hover:bg-stone-50 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={confirmFoodCategoryRemoval}
+                disabled={deleteFood.isPending}
+                className="rounded-xl bg-red-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {deleteFood.isPending ? "Deleting…" : "Delete category"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <MenuItemEditModal
         item={editing}
@@ -232,9 +288,7 @@ function NowasteSection({
   onEdit: (n: NowasteItem) => void;
 }) {
   if (isLoading) {
-    return (
-      <p className="py-12 text-center text-gray-500">Loading nowaste items…</p>
-    );
+    return <LoadingSpinner label="Loading nowaste items…" className="py-12" />;
   }
   if (items.length === 0) {
     return (
