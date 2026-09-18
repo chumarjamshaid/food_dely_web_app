@@ -271,6 +271,11 @@ function PaymentPageContent() {
 
   // Pre-fill form with user data if authenticated, or from tab-scoped checkout data.
   useEffect(() => {
+    const savedDeliveryType = sessionStorage.getItem("checkout_delivery_type");
+    if (savedDeliveryType === "delivery" || savedDeliveryType === "pickup") {
+      setRequestedDeliveryType(savedDeliveryType);
+    }
+
     if (isAuthenticated && user && !isAuthLoading) {
       setGuestInfo((prev) => ({
         ...prev,
@@ -283,8 +288,6 @@ function PaymentPageContent() {
       // For non-authenticated users, check sessionStorage for data saved from cart page
       if (typeof window !== "undefined") {
         const savedGuestInfo = sessionStorage.getItem("checkout_guest_info");
-        const savedDeliveryType = sessionStorage.getItem("checkout_delivery_type");
-
         if (savedGuestInfo) {
           try {
             const parsedInfo = JSON.parse(savedGuestInfo);
@@ -304,9 +307,6 @@ function PaymentPageContent() {
           }
         }
 
-        if (savedDeliveryType === "delivery" || savedDeliveryType === "pickup") {
-          setRequestedDeliveryType(savedDeliveryType);
-        }
       }
     }
   }, [isAuthenticated, user, isAuthLoading]);

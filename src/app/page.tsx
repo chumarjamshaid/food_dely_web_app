@@ -8,7 +8,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { useLanguage } from "@/components/LanguageProvider";
 import LanguageSwitch from "@/components/LanguageSwitch";
-import { getBrowserLocation } from "@/lib/browser-location";
+import { getAddressForCoordinates, getBrowserLocation, isCurrentLocationPlaceholder } from "@/lib/browser-location";
 
 const heroImages = [
   "/images/Dashboard-1.png",
@@ -58,10 +58,33 @@ export default function Home() {
     sessionStorage.removeItem("focusDeliveryAddress");
 
     const storedAddress = sessionStorage.getItem("deliveryAddress") ?? "";
-    setAddress(storedAddress);
+    const storedLat = Number(sessionStorage.getItem("deliveryLocationLat"));
+    const storedLng = Number(sessionStorage.getItem("deliveryLocationLng"));
+    const hasStoredCoords = Number.isFinite(storedLat) && Number.isFinite(storedLng);
+
+    setAddress(isCurrentLocationPlaceholder(storedAddress) ? "" : storedAddress);
     setSelectedAddress("");
     setSelectedCoords(null);
     setSuggestionsOpen(true);
+
+    if (isCurrentLocationPlaceholder(storedAddress) && hasStoredCoords) {
+      setLocationLoading(true);
+      void getAddressForCoordinates(
+        { lat: storedLat, lng: storedLng },
+        document.documentElement.lang === "fr" ? "fr" : "en",
+      )
+        .then((detectedAddress) => {
+          setAddress(detectedAddress);
+          setSelectedAddress(detectedAddress);
+          setSelectedCoords({ lat: storedLat, lng: storedLng });
+          sessionStorage.setItem("deliveryAddress", detectedAddress);
+          setSuggestionsOpen(false);
+        })
+        .catch((error: unknown) => {
+          setLocationError(error instanceof Error ? error.message : "We couldn’t determine your address. Please enter it manually.");
+        })
+        .finally(() => setLocationLoading(false));
+    }
 
     window.requestAnimationFrame(() => {
       addressInputRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -108,7 +131,7 @@ export default function Home() {
     setLocationLoading(true);
     try {
         const coords = await getBrowserLocation();
-        const label = fr ? "Ma position actuelle" : "My current location";
+        const label = await getAddressForCoordinates(coords, fr ? "fr" : "en");
 
         setSelectedCoords(coords);
         setAddress(label);

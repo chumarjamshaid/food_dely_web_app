@@ -1,5 +1,12 @@
 export type BrowserCoordinates = { lat: number; lng: number };
 
+type ReverseGeocodeResponse = { address?: string; detail?: string };
+
+export function isCurrentLocationPlaceholder(value: string | null | undefined) {
+  const normalized = value?.trim().toLocaleLowerCase();
+  return normalized === "my current location" || normalized === "ma position actuelle";
+}
+
 function geolocationErrorMessage(error: GeolocationPositionError) {
   if (error.code === error.PERMISSION_DENIED) {
     return "Location access was denied. Allow location for this site in your browser settings, then try again.";
@@ -31,4 +38,23 @@ export function getBrowserLocation(): Promise<BrowserCoordinates> {
       { enableHighAccuracy: true, timeout: 15000, maximumAge: 5 * 60 * 1000 },
     );
   });
+}
+
+export async function getAddressForCoordinates(
+  coordinates: BrowserCoordinates,
+  language = "en",
+): Promise<string> {
+  const params = new URLSearchParams({
+    lat: String(coordinates.lat),
+    lng: String(coordinates.lng),
+    language,
+  });
+  const response = await fetch(`/api/reverse-geocode?${params.toString()}`);
+  const result = await response.json() as ReverseGeocodeResponse;
+
+  if (!response.ok || !result.address?.trim()) {
+    throw new Error(result.detail || "We found your location but couldn’t determine its address. Please enter it manually.");
+  }
+
+  return result.address.trim();
 }

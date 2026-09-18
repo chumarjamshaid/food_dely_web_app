@@ -21,6 +21,7 @@ import {
   LoaderCircle,
   LogOut,
   MapPin,
+  PackageCheck,
   Search,
   ShoppingBag,
   Star,
@@ -32,7 +33,7 @@ import Link from "next/link";
 import { getTodayOpeningHours } from "@/lib/opening-hours";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useRef, useState } from "react";
-import { getBrowserLocation } from "@/lib/browser-location";
+import { getAddressForCoordinates, getBrowserLocation, isCurrentLocationPlaceholder } from "@/lib/browser-location";
 
 function normalizeSearchText(value: string | null | undefined) {
   return (value ?? "")
@@ -62,7 +63,7 @@ function RestaurantListPage() {
 
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState<number | null>(null);
-  const [availability, setAvailability] = useState("all");
+  const [availability, setAvailability] = useState<"delivery" | "pickup">("delivery");
   const [highlight, setHighlight] = useState("all");
   const [deliveryAddress, setDeliveryAddress] = useState("");
   const [deliveryLat, setDeliveryLat] = useState<number | null>(null);
@@ -75,6 +76,18 @@ function RestaurantListPage() {
   const [currentLocationLoading, setCurrentLocationLoading] = useState(false);
   const [currentLocationError, setCurrentLocationError] = useState("");
   const searchInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const savedFulfilmentType = sessionStorage.getItem("checkout_delivery_type");
+    if (savedFulfilmentType === "delivery" || savedFulfilmentType === "pickup") {
+      setAvailability(savedFulfilmentType);
+    }
+  }, []);
+
+  const selectAvailability = (type: "delivery" | "pickup") => {
+    setAvailability(type);
+    sessionStorage.setItem("checkout_delivery_type", type);
+  };
 
   useEffect(() => {
     const timer = window.setTimeout(
@@ -92,7 +105,7 @@ function RestaurantListPage() {
     setCurrentLocationLoading(true);
     try {
       const coords = await getBrowserLocation();
-      const label = "My current location";
+      const label = await getAddressForCoordinates(coords);
       setDeliveryAddress(label);
       setDeliveryLat(coords.lat);
       setDeliveryLng(coords.lng);
@@ -121,6 +134,32 @@ function RestaurantListPage() {
     const parsedLat = latFromUrl === null ? null : Number(latFromUrl);
     const parsedLng = lngFromUrl === null ? null : Number(lngFromUrl);
     if (addressFromUrl) {
+      if (
+        isCurrentLocationPlaceholder(addressFromUrl) &&
+        Number.isFinite(parsedLat) &&
+        Number.isFinite(parsedLng)
+      ) {
+        const coordinates = { lat: parsedLat as number, lng: parsedLng as number };
+        setDeliveryAddress("");
+        setDeliveryLat(coordinates.lat);
+        setDeliveryLng(coordinates.lng);
+        setCurrentLocationLoading(true);
+        void getAddressForCoordinates(coordinates)
+          .then((detectedAddress) => {
+            setDeliveryAddress(detectedAddress);
+            sessionStorage.setItem("deliveryAddress", detectedAddress);
+            sessionStorage.setItem("deliveryLocationLat", String(coordinates.lat));
+            sessionStorage.setItem("deliveryLocationLng", String(coordinates.lng));
+            const url = new URL(window.location.href);
+            url.searchParams.set("address", detectedAddress);
+            window.history.replaceState(null, "", url.toString());
+          })
+          .catch((error: unknown) => {
+            setCurrentLocationError(error instanceof Error ? error.message : "We couldn’t determine your address. Please enter it manually.");
+          })
+          .finally(() => setCurrentLocationLoading(false));
+        return;
+      }
       setDeliveryAddress(addressFromUrl);
       setDeliveryLat(Number.isFinite(parsedLat) ? parsedLat : null);
       setDeliveryLng(Number.isFinite(parsedLng) ? parsedLng : null);
@@ -138,6 +177,27 @@ function RestaurantListPage() {
     const storedLat = storedLatValue === null ? null : Number(storedLatValue);
     const storedLng = storedLngValue === null ? null : Number(storedLngValue);
     if (storedAddress) {
+      if (
+        isCurrentLocationPlaceholder(storedAddress) &&
+        storedLat !== null && Number.isFinite(storedLat) &&
+        storedLng !== null && Number.isFinite(storedLng)
+      ) {
+        const coordinates = { lat: storedLat, lng: storedLng };
+        setDeliveryAddress("");
+        setDeliveryLat(coordinates.lat);
+        setDeliveryLng(coordinates.lng);
+        setCurrentLocationLoading(true);
+        void getAddressForCoordinates(coordinates)
+          .then((detectedAddress) => {
+            setDeliveryAddress(detectedAddress);
+            sessionStorage.setItem("deliveryAddress", detectedAddress);
+          })
+          .catch((error: unknown) => {
+            setCurrentLocationError(error instanceof Error ? error.message : "We couldn’t determine your address. Please enter it manually.");
+          })
+          .finally(() => setCurrentLocationLoading(false));
+        return;
+      }
       setDeliveryAddress(storedAddress);
       setDeliveryLat(storedLat !== null && Number.isFinite(storedLat) ? storedLat : null);
       setDeliveryLng(storedLng !== null && Number.isFinite(storedLng) ? storedLng : null);
@@ -158,9 +218,9 @@ function RestaurantListPage() {
     category: category || undefined,
     open: showClosed ? undefined : true,
     delivery: availability === "delivery" ? true : undefined,
-    address: deliveryAddress || undefined,
-    lat: deliveryLat ?? undefined,
-    lng: deliveryLng ?? undefined,
+    address: availability === "delivery" ? deliveryAddress || undefined : undefined,
+    lat: availability === "delivery" ? deliveryLat ?? undefined : undefined,
+    lng: availability === "delivery" ? deliveryLng ?? undefined : undefined,
   });
 
   const searchTerms = normalizeSearchText(search).split(" ").filter(Boolean);
@@ -174,7 +234,6 @@ function RestaurantListPage() {
           : "";
   const quickFilters = [
     { value: "open", label: "Open now", icon: <Clock3 size={16} className="text-[#4b9b60]" /> },
-    { value: "delivery", label: "Delivery", icon: <Bike size={16} className="text-[#d87836]" /> },
     { value: "rating", label: "Places with deals", icon: <Tag size={16} className="text-[#f0a52f]" /> },
     { value: "nowaste", label: "NoWaste", icon: <Leaf size={16} className="text-[#58a56b]" /> },
   ] as const;
@@ -195,7 +254,6 @@ function RestaurantListPage() {
   const clearFilters = () => {
     setSearch("");
     setCategory(null);
-    setAvailability("all");
     setHighlight("all");
     setShowClosed(false);
   };
@@ -203,15 +261,30 @@ function RestaurantListPage() {
   return (
     <div className="min-h-screen bg-[#fbfaf8] text-[#241f1c]">
       <header className="sticky top-0 z-50 border-b border-[#ece3de] bg-white/90 backdrop-blur-xl">
-        <div className="mx-auto flex min-h-[72px] max-w-7xl items-center gap-2 px-4 sm:gap-3 sm:px-8 lg:px-10">
+        <div className="mx-auto flex min-h-[72px] max-w-7xl flex-wrap items-center gap-2 px-4 py-2 sm:flex-nowrap sm:gap-3 sm:px-8 lg:px-10">
           <Link href="/" className="mr-auto text-xl font-black tracking-[-0.04em] sm:text-[24px]">
             <span className="text-[#c83b2b]">FOOD</span>DELY
           </Link>
 
-          <div className="hidden rounded-xl bg-[#f4eeeb] p-1 sm:flex">
-            <span className="rounded-lg bg-white px-4 py-2 text-sm font-bold text-[#b63825] shadow-sm">
+          <div className="order-last grid w-full grid-cols-2 rounded-xl bg-[#f4eeeb] p-1 sm:order-none sm:flex sm:w-auto" role="group" aria-label="Fulfilment type">
+            <button
+              type="button"
+              aria-pressed={availability === "delivery"}
+              onClick={() => selectAvailability("delivery")}
+              className={`inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-bold transition ${availability === "delivery" ? "bg-white text-[#b63825] shadow-sm" : "text-[#766a64] hover:text-[#b63825]"}`}
+            >
+              <Bike size={16} />
               Delivery
-            </span>
+            </button>
+            <button
+              type="button"
+              aria-pressed={availability === "pickup"}
+              onClick={() => selectAvailability("pickup")}
+              className={`inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-bold transition ${availability === "pickup" ? "bg-white text-[#b63825] shadow-sm" : "text-[#766a64] hover:text-[#b63825]"}`}
+            >
+              <PackageCheck size={16} />
+              Pickup
+            </button>
           </div>
 
           <Link href="/cart" aria-label="Cart" className="relative grid h-10 w-10 place-items-center rounded-xl transition hover:bg-[#f7f1ee] hover:text-[#b63825]">
@@ -254,7 +327,7 @@ function RestaurantListPage() {
           {deliveryAddress && (
             <div className="mx-auto mt-6 flex w-fit max-w-full items-center gap-2 rounded-full border border-[#e5d7d0] bg-white px-4 py-2 text-sm font-semibold text-[#5f534d] shadow-[0_8px_22px_rgba(55,35,27,0.06)]">
               <MapPin size={16} className="shrink-0 text-[#c83b2b]" />
-              <span className="truncate">Delivering near {deliveryAddress}</span>
+              <span className="truncate">{availability === "delivery" ? "Delivering" : "Pickup"} near {deliveryAddress}</span>
               <button
                 type="button"
                 onClick={() => {
@@ -288,7 +361,7 @@ function RestaurantListPage() {
                     setLocationSearch("");
                   }
                 }}
-                placeholder={changingLocation ? "Enter and select a new delivery address" : "Search restaurants or cuisines"}
+                placeholder={changingLocation ? "Enter and select a new location" : "Search restaurants or cuisines"}
                 autoComplete={changingLocation ? "street-address" : "off"}
                 className="min-w-0 flex-1 bg-transparent text-base outline-none placeholder:text-stone-400"
               />
@@ -366,9 +439,7 @@ function RestaurantListPage() {
                 const isActive =
                   option.value === "open"
                     ? !showClosed
-                    : option.value === "delivery"
-                      ? availability === "delivery"
-                      : option.value === "rating"
+                    : option.value === "rating"
                         ? highlight === "rating"
                         : highlight === "nowaste";
 
@@ -380,8 +451,6 @@ function RestaurantListPage() {
                     onClick={() => {
                       if (option.value === "open") {
                         setShowClosed((current) => !current);
-                      } else if (option.value === "delivery") {
-                        setAvailability((current) => current === "delivery" ? "all" : "delivery");
                       } else if (option.value === "rating") {
                         setHighlight((current) => current === "rating" ? "all" : "rating");
                       } else {

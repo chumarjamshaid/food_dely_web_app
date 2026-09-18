@@ -27,6 +27,11 @@ function OrdersPageContent() {
   const [cancellingOrderId, setCancellingOrderId] = useState<number | null>(null);
   const [showCancelDialog, setShowCancelDialog] = useState<number | null>(null);
   const [cancelReason, setCancelReason] = useState("");
+  const [displayAll, setDisplayAll] = useState(false);
+
+  const visibleOrders = (orders ?? []).filter(
+    (order) => displayAll || order.status.toLowerCase() !== "completed",
+  );
 
   // Redirect if not authenticated (use useEffect to avoid hydration mismatch)
   useEffect(() => {
@@ -174,12 +179,24 @@ function OrdersPageContent() {
       </header>
 
       <main className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-8 sm:py-12">
-        <div className="mb-8">
-          <p className="text-xs font-bold uppercase tracking-[0.17em] text-[#b63825]">Order history</p>
-          <h1 className="mt-2 text-3xl font-black tracking-[-0.04em] sm:text-4xl">
-            Your orders
-          </h1>
-          <p className="mt-2 text-sm text-[#7d716a]">Review your orders and quickly return to your favourites.</p>
+        <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-[0.17em] text-[#b63825]">Order history</p>
+            <h1 className="mt-2 text-3xl font-black tracking-[-0.04em] sm:text-4xl">
+              Your orders
+            </h1>
+            <p className="mt-2 text-sm text-[#7d716a]">Review your orders and quickly return to your favourites.</p>
+          </div>
+          {Boolean(orders?.some((order) => order.status.toLowerCase() === "completed")) && (
+            <button
+              type="button"
+              aria-pressed={displayAll}
+              onClick={() => setDisplayAll((current) => !current)}
+              className="w-fit rounded-full border border-[#dfd3cd] bg-white px-5 py-2.5 text-sm font-bold text-[#665b55] shadow-sm transition hover:border-[#c83b2b] hover:text-[#b63825]"
+            >
+              {displayAll ? "Hide completed" : "Display all"}
+            </button>
+          )}
         </div>
 
         {ordersLoading ? (
@@ -203,9 +220,15 @@ function OrdersPageContent() {
               Browse Restaurants
             </Link>
           </div>
+        ) : visibleOrders.length === 0 ? (
+          <div className="rounded-[28px] border border-dashed border-[#d9cac3] bg-white px-6 py-16 text-center">
+            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-[#fff0eb] text-[#c83b2b]"><PackageCheck size={28} /></div>
+            <p className="mt-5 text-xl font-black">No active orders.</p>
+            <p className="mt-2 text-sm text-[#7d716a]">Choose “Display all” to include your completed orders.</p>
+          </div>
         ) : (
           <div className="space-y-6">
-            {[...orders]
+            {[...visibleOrders]
               .sort((a, b) => getOrderSortKey(b).localeCompare(getOrderSortKey(a)))
               .map((order) => (
               <div
