@@ -258,7 +258,17 @@ export function useMarkOrderCompleted() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: makeOrderAction("complete"),
-    onSuccess: () => invalidateOrders(qc),
+    onSuccess: (completedOrder) => {
+      qc.setQueriesData<RestaurantOrderListItem[]>(
+        { queryKey: ownerOrdersKeys.all },
+        (orders) => orders?.map((order) =>
+          order.id === completedOrder.id
+            ? { ...order, ...completedOrder, status: "completed" }
+            : order,
+        ),
+      );
+      invalidateOrders(qc);
+    },
   });
 }
 

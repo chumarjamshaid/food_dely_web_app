@@ -16,7 +16,7 @@ import {
 import { hasAuthToken } from "@/lib/api/client";
 import { extractApiError } from "@/lib/api/error";
 import * as Popover from "@radix-ui/react-popover";
-import { CalendarDays, ChevronDown, Mail, MapPin, Phone, SlidersHorizontal, User } from "lucide-react";
+import { CalendarDays, ChevronDown, LoaderCircle, Mail, MapPin, Phone, SlidersHorizontal, User } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { Fragment, useEffect, useMemo, useState } from "react";
 import DatePicker from "react-datepicker";
@@ -147,16 +147,19 @@ export default function OrderListPage() {
   }, [ownerQuery.error, router]);
 
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
-  const [status, setStatus] = useState<"all" | RestaurantOrderStatus>("all");
-  const [displayAll, setDisplayAll] = useState(false);
+  const [status, setStatus] = useState<"active" | "all" | RestaurantOrderStatus>("active");
   const [expandedOrders, setExpandedOrders] = useState<number[]>([]);
 
   const ordersQuery = useRestaurantOrders(
     {
       date: toApiDate(selectedDate),
-      status: status === "all" ? undefined : status,
+      status: status === "active" || status === "all" ? undefined : status,
     },
     !!ownerQuery.data
+  );
+  const completedOrdersQuery = useRestaurantOrders(
+    { date: toApiDate(selectedDate), status: "completed" },
+    !!ownerQuery.data && status === "all",
   );
 
   const prepareMut = useMarkOrderPreparing();
@@ -171,10 +174,18 @@ export default function OrderListPage() {
 
   const orders = useMemo(() => {
     const list = ordersQuery.data ?? [];
-    return displayAll
-      ? list
-      : list.filter((order) => (order.status || "").toLowerCase() !== "completed");
-  }, [displayAll, ordersQuery.data]);
+    if (status === "all") {
+      const byId = new Map(list.map((order) => [order.id, order]));
+      for (const order of completedOrdersQuery.data ?? []) byId.set(order.id, order);
+      return [...byId.values()];
+    }
+    if (status === "active") {
+      return list.filter((order) => (order.status || "").trim().toLowerCase() !== "completed");
+    }
+    return list.filter((order) => (order.status || "").trim().toLowerCase() === status);
+  }, [completedOrdersQuery.data, ordersQuery.data, status]);
+
+  const ordersLoading = ordersQuery.isLoading || (status === "all" && completedOrdersQuery.isLoading);
 
   if (!authChecked || ownerQuery.isLoading) {
     return <LoadingSpinner label="Loading orders…" fullScreen />;
@@ -251,14 +262,11 @@ export default function OrderListPage() {
                     </label>
                     <select
                       value={status}
-                      onChange={(e) => {
-                        const nextStatus = e.target.value as typeof status;
-                        setStatus(nextStatus);
-                        if (nextStatus === "completed") setDisplayAll(true);
-                      }}
+                      onChange={(e) => setStatus(e.target.value as typeof status)}
                       className="h-12 w-full rounded-lg border border-gray-300 bg-white px-3 text-sm font-medium text-gray-700"
                     >
-                      <option value="all">All active statuses</option>
+                      <option value="active">Active orders</option>
+                      <option value="all">Display all</option>
                       {ORDER_STATUS_VALUES.map((s) => (
                         <option key={s} value={s}>
                           {STATUS_LABELS[s]}
@@ -266,22 +274,6 @@ export default function OrderListPage() {
                       ))}
                     </select>
                   </div>
-                  <label className="flex items-center gap-2 rounded-xl border border-stone-200 px-3 py-2 text-sm text-stone-700">
-                    <input
-                      type="checkbox"
-                      checked={displayAll}
-                      onChange={(e) => {
-                        const checked = e.target.checked;
-                        setDisplayAll(checked);
-                        if (!checked && status === "completed") setStatus("all");
-                      }}
-                      className="h-4 w-4 accent-[#c83b2b]"
-                    />
-                    <span>
-                      <span className="block font-semibold text-stone-900">Display all</span>
-                      <span className="block text-xs text-stone-500">Include completed orders</span>
-                    </span>
-                  </label>
                   <Popover.Arrow className="fill-white" />
                 </Popover.Content>
               </Popover.Portal>
@@ -309,14 +301,14 @@ export default function OrderListPage() {
               </tr>
             </thead>
             <tbody className="text-sm text-stone-800">
-              {ordersQuery.isLoading && (
+              {ordersLoading && (
                 <tr>
                   <td colSpan={6} className="px-6 py-8 text-center text-gray-500">
                     <LoadingSpinner label="Loading orders…" />
                   </td>
                 </tr>
               )}
-              {!ordersQuery.isLoading && orders.length === 0 && (
+              {!ordersLoading && orders.length === 0 && (
                 <tr>
                   <td colSpan={6} className="px-6 py-8 text-center text-gray-500">
                     No orders for the selected filters.
@@ -376,10 +368,10 @@ export default function OrderListPage() {
                       </td>
                       <td className="px-6 py-4 font-medium">
                         <div className="flex min-w-[360px] flex-wrap gap-2">
-                          {canPrepare && <button onClick={() => { setActionError(""); prepareMut.mutate(order.id, { onError: showActionError }); }} className="rounded-full border border-stone-300 px-3 py-1.5 text-xs font-semibold hover:bg-stone-50">Preparing</button>}
-                          {canReady && <button onClick={() => { setActionError(""); readyMut.mutate(order.id, { onError: showActionError }); }} className="rounded-full border border-stone-300 px-3 py-1.5 text-xs font-semibold hover:bg-stone-50">Ready</button>}
-                          {canDeliver && <button onClick={() => { setActionError(""); deliverMut.mutate(order.id, { onError: showActionError }); }} className="rounded-full border border-stone-300 px-3 py-1.5 text-xs font-semibold hover:bg-stone-50">Delivering</button>}
-                          {canComplete && <button onClick={() => { setActionError(""); completeMut.mutate(order.id, { onError: showActionError }); }} className="rounded-full bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700">Completed</button>}
+                          {canPrepare && <button disabled={prepareMut.isPending} onClick={() => { setActionError(""); prepareMut.mutate(order.id, { onError: showActionError }); }} className="inline-flex items-center gap-1.5 rounded-full border border-stone-300 px-3 py-1.5 text-xs font-semibold hover:bg-stone-50 disabled:cursor-wait disabled:opacity-60">{prepareMut.isPending && prepareMut.variables === order.id && <LoaderCircle size={13} className="animate-spin" />}Preparing</button>}
+                          {canReady && <button disabled={readyMut.isPending} onClick={() => { setActionError(""); readyMut.mutate(order.id, { onError: showActionError }); }} className="inline-flex items-center gap-1.5 rounded-full border border-stone-300 px-3 py-1.5 text-xs font-semibold hover:bg-stone-50 disabled:cursor-wait disabled:opacity-60">{readyMut.isPending && readyMut.variables === order.id && <LoaderCircle size={13} className="animate-spin" />}Ready</button>}
+                          {canDeliver && <button disabled={deliverMut.isPending} onClick={() => { setActionError(""); deliverMut.mutate(order.id, { onError: showActionError }); }} className="inline-flex items-center gap-1.5 rounded-full border border-stone-300 px-3 py-1.5 text-xs font-semibold hover:bg-stone-50 disabled:cursor-wait disabled:opacity-60">{deliverMut.isPending && deliverMut.variables === order.id && <LoaderCircle size={13} className="animate-spin" />}Delivering</button>}
+                          {canComplete && <button disabled={completeMut.isPending} onClick={() => { setActionError(""); completeMut.mutate(order.id, { onError: showActionError }); }} className="inline-flex items-center gap-1.5 rounded-full bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 disabled:cursor-wait disabled:opacity-60">{completeMut.isPending && completeMut.variables === order.id && <LoaderCircle size={13} className="animate-spin" />}Mark completed</button>}
                           {canCancel && <button onClick={() => setCancelTarget(order.id)} className="rounded-full border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50">Cancel</button>}
                           {!canPrepare && !canReady && !canDeliver && !canComplete && !canCancel && <span className="text-xs text-gray-400">No actions available</span>}
                         </div>
